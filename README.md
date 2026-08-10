@@ -1,4 +1,4 @@
-# Cash Flow Minimizer — Splitwise-style App
+# Chia Đều (ChiaDeu) — Splitwise-style App
 
 *Kế hoạch dự án · Schema · Backend (Go + C++) · Frontend (Next.js PWA) · Tích hợp SePay + PayOS + MoMo*
 
