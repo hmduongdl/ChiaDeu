@@ -1,24 +1,24 @@
-# Chia Đều (ChiaDeu) — Splitwise-style App
+# Chia Đều — Cash Flow Minimizer
 
-*Kế hoạch dự án · Schema · Backend (Go + C++) · Frontend (Next.js PWA) · Tích hợp SePay + PayOS + MoMo*
+*Kế hoạch dự án · Schema · Backend Go · Frontend Next.js PWA · Tích hợp SePay + PayOS + MoMo · Deploy Vercel*
 
 ---
 
 ## 1. Tổng quan dự án
 
-Ứng dụng chia tiền nhóm kiểu Splitwise, với điểm khác biệt: thay vì nhập tay từng khoản chi, người dùng liên kết tài khoản ngân hàng qua SePay để đồng bộ giao dịch tự động, sau đó chọn giao dịch cần chia sẻ và hệ thống tự tính toán số tiền tối thiểu cần thanh toán giữa các thành viên.
+Ứng dụng chia tiền nhóm kiểu Splitwise, với điểm khác biệt: thay vì nhập tay từng khoản chi, người dùng liên kết tài khoản ngân hàng qua SePay để đồng bộ giao dịch tự động, sau đó chọn giao dịch cần chia và hệ thống tự tính toán số tiền tối thiểu cần thanh toán giữa các thành viên.
 
-# Bài toán là gì?
+### Bài toán
 
 Một nhóm bạn đi du lịch/ăn uống chung. Mỗi người trả tiền hộ vài lần cho cả nhóm. Cuối cùng, ai nợ ai bao nhiêu tiền để hoàn lại công bằng?
 
-Vấn đề thực tế: Nếu tính thủ công, số giao dịch hoàn tiền sẽ rất nhiều và lộn xộn. Ví dụ:
+Vấn đề thực tế: nếu tính thủ công, số giao dịch hoàn tiền sẽ rất nhiều và lộn xộn. Ví dụ:
 
-A nợ B: 100k
-B nợ C: 150k
-C nợ A: 50k
+- A nợ B: 100k
+- B nợ C: 150k
+- C nợ A: 50k
 
-Nếu chuyển từng khoản riêng lẻ → 3 giao dịch. Nhưng thực ra có thể rút gọn xuống còn 1-2 giao dịch mà vẫn đúng số tiền mỗi người cần nhận/trả. Đây chính là bài toán "Cash Flow Minimization" — tối thiểu hóa số lượng giao dịch thanh toán.
+Nếu chuyển từng khoản riêng lẻ → 3 giao dịch. Nhưng thực ra có thể rút gọn xuống còn 1-2 giao dịch mà vẫn đúng số tiền mỗi người cần nhận/trả. Đây chính là bài toán **Cash Flow Minimization** — tối thiểu hóa số lượng giao dịch thanh toán.
 
 ### Luồng sử dụng chính
 
@@ -36,37 +36,33 @@ Nếu chuyển từng khoản riêng lẻ → 3 giao dịch. Nhưng thực ra c�
 
 | Thành phần | Công nghệ | Lý do chọn |
 |---|---|---|
-| Frontend | Next.js (React + TypeScript) + Tailwind CSS, dạng PWA | Một codebase dùng được cho cả web và mobile, cài lên màn hình chính như app thật, hỗ trợ QR scan qua camera |
-| Backend API | Go (Fiber hoặc Gin) | Hiệu năng cao, dễ viết REST API, xử lý webhook SePay/PayOS tốt, đã có kinh nghiệm từ SPS AI |
-| Core Algorithm | C++ (biên dịch thành shared library, gọi qua cgo) | Thể hiện kỹ năng cấu trúc dữ liệu (Heap) theo đúng yêu cầu môn DSA, tách biệt phần tính toán nặng khỏi phần API |
+| Frontend | Next.js (React + TypeScript) + Tailwind CSS, PWA | Một codebase dùng cho cả web và mobile, cài lên màn hình chính như app thật, deploy Vercel miễn phí |
+| Backend API | Go (Fiber) | Hiệu năng cao, single binary deploy, xử lý webhook tốt, toàn bộ hệ thống dùng chung một ngôn ngữ |
+| Core Algorithm | Go (`container/heap`) | Thuật toán Minimize Cash Flow cài đặt trực tiếp trong Go, dùng Max-Heap với Greedy, O(N log N), không cần cgo hay external dependency |
 | Database | PostgreSQL | Quan hệ dữ liệu rõ ràng giữa Users – Groups – Expenses – Settlements, hỗ trợ transaction an toàn |
-| Thanh toán / Ngân hàng | SePay + PayOS + MoMo (sandbox) | Đa cổng thanh toán — mỗi cổng đảm nhiệm một vai trò riêng, xem chi tiết mục 7 |
+| Thanh toán | SePay + PayOS + MoMo (sandbox) | Đa cổng thanh toán — mỗi cổng đảm nhiệm một vai trò riêng |
 
 ---
 
 ## 3. Kiến trúc hệ thống
 
 ```
-┌───────────────────────┐
-│  Next.js PWA (Mobile)  │  UI, chọn giao dịch, xem balance, quét QR
-└───────────┬────────────┘
+┌──────────────────────────┐
+│  Next.js PWA (Vercel)     │  UI, chọn giao dịch, xem balance, quét QR
+└───────────┬────────────────┘
             │ REST / JSON API
-┌───────────▼────────────┐
-│      Go Backend         │  API, Auth, xử lý webhook SePay/PayOS
-│     (Fiber / Gin)        │
-└──────┬───────────┬─────┘
+┌───────────▼────────────────┐
+│      Go Backend (Fiber)     │  REST API, Auth, xử lý webhook
+│                             │  Minimize Cash Flow (container/heap)
+└──────┬───────────┬──────────┘
        │           │
-┌──────▼───┐  ┌────▼─────────────┐
-│ Postgres │  │  C++ Core Engine │
-│   (DB)   │  │  (cgo bridge)    │
-└──────────┘  │  MinimizeCashFlow│
-              └──────────────────┘
-       │
-┌──────▼─────────────────────┐
-│  SePay / PayOS / MoMo      │  Đồng bộ giao dịch ngân hàng
-│  Webhooks                  │  + xác nhận thanh toán settlement
-└────────────────────────────┘
+┌──────▼───┐  ┌────▼─────────────────┐
+│ Postgres │  │  SePay / PayOS / MoMo │
+│   (DB)   │  │  Webhooks             │
+└──────────┘  └──────────────────────┘
 ```
+
+Điểm khác biệt so với thiết kế ban đầu: **toàn bộ backend là Go thuần**, không cần C++ shared library hay cgo bridge. Thuật toán Minimize Cash Flow được cài đặt trực tiếp trong Go package `algo/`, dùng `container/heap` của standard library. Cách này giúp codebase đồng nhất, build đơn giản (single binary), deploy dễ dàng.
 
 ---
 
@@ -248,7 +244,7 @@ CREATE INDEX idx_bank_tx_user_unused ON bank_transactions(user_id, is_used);
 |---|---|
 | `POST /api/auth/link-bank` | Liên kết tài khoản ngân hàng với SePay |
 | `POST /api/webhooks/sepay` | Nhận webhook giao dịch mới từ SePay |
-| `GET /api/transactions?unused=true` | Lấy danh sách giao dịch ngân hàng chưa được gán vào Expense nào |
+| `GET /api/transactions?unused=true` | Lấy danh sách giao dịch ngân hàng chưa được gán vào Expense |
 | `POST /api/groups` | Tạo nhóm mới, sinh share_code |
 | `POST /api/groups/join/:shareCode` | Tham gia nhóm qua mã mời |
 | `GET /api/groups/:id` | Thông tin nhóm và thành viên |
@@ -264,7 +260,7 @@ CREATE INDEX idx_bank_tx_user_unused ON bank_transactions(user_id, is_used);
 
 ## 6. Thuật toán cốt lõi — Minimize Cash Flow
 
-Phần này thể hiện trọng tâm DSA của dự án: dùng Greedy kết hợp Max-Heap để tối thiểu hoá số lượng giao dịch thanh toán.
+Dùng Greedy kết hợp Max-Heap để tối thiểu hoá số lượng giao dịch thanh toán. Toàn bộ cài đặt bằng Go thuần (`container/heap`), không phụ thuộc ngoài.
 
 ### Các bước xử lý
 
@@ -274,14 +270,16 @@ Phần này thể hiện trọng tâm DSA của dự án: dùng Greedy kết h�
 4. Cập nhật lại số dư, loại người về 0 khỏi heap, tiếp tục đến khi hết.
 5. Độ phức tạp: **O(N log N)** nhờ dùng Heap thay vì tìm max tuyến tính mỗi vòng lặp.
 
-### Vị trí trong kiến trúc
-
-Thuật toán được cài đặt bằng C++ (dùng `std::priority_queue`), biên dịch thành shared library (`.so`), và được gọi từ Go backend thông qua **cgo**. Cách tách này cho phép phần tính toán nặng chạy độc lập, dễ kiểm thử và benchmark riêng, đồng thời đáp ứng yêu cầu triển khai cả Go lẫn C++ trong cùng dự án.
+### Code (Go)
 
 ```go
+package algo
+
+import "container/heap"
+
 type Balance struct {
     UserID string
-    Amount float64 // dương = được nợ, âm = đang nợ
+    Amount float64 // dương = được nhận, âm = đang nợ
 }
 
 type Settlement struct {
@@ -293,18 +291,20 @@ type Settlement struct {
 func MinimizeCashFlow(balances []Balance) []Settlement {
     // 1. Tách thành 2 Max-Heap: creditors (dương) và debtors (âm)
     // 2. Lặp: lấy max creditor + max debtor
-    //    settle_amount = min(|creditor|, |debtor|)
-    //    tạo Settlement{debtor, creditor, settle_amount}
+    //    settleAmount = min(creditor, |debtor|)
+    //    tạo Settlement{debtor, creditor, settleAmount}
     //    cập nhật lại heap, loại người có balance = 0
     // 3. Trả về danh sách settlements tối thiểu
 }
 ```
 
+Vị trí trong codebase: `backend/algo/minimize_cash_flow.go`. Package `algo` được import trực tiếp từ các handler trong `internal/handlers/`, không cần cgo bridge.
+
 ---
 
 ## 7. Tích hợp thanh toán đa cổng (SePay + PayOS + MoMo)
 
-MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số thuế, không phù hợp để đăng ký trực tiếp cho một dự án cá nhân/sinh viên. Vì vậy hệ thống tách vai trò rõ ràng giữa 3 cổng, mỗi cổng đảm nhiệm đúng thế mạnh của mình, tránh phụ thuộc vào một nhà cung cấp duy nhất.
+MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số thuế, không phù hợp để đăng ký trực tiếp cho dự án cá nhân/sinh viên. Vì vậy hệ thống tách vai trò rõ ràng giữa 3 cổng.
 
 ### 7.1 Vai trò từng cổng
 
@@ -312,7 +312,7 @@ MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số th
 |---|---|---|
 | **SePay** | Đồng bộ lịch sử giao dịch ngân hàng (luồng chọn giao dịch để tạo Expense) | Đăng ký cá nhân dễ dàng, webhook realtime, đúng thế mạnh theo dõi biến động số dư |
 | **PayOS** | Sinh QR / payment link cho từng Settlement khi cần thanh toán chéo giữa các thành viên | Không yêu cầu người nhận có tài khoản SePay riêng, chỉ cần số tài khoản ngân hàng để tạo QR, có sandbox test miễn phí |
-| **MoMo (Sandbox)** | Lựa chọn thanh toán phụ, hiển thị trong UI như một phương thức thay thế | Tích hợp được ở môi trường Test mà không cần tài khoản Business, đủ để demo đa dạng phương thức thanh toán trước lớp |
+| **MoMo (Sandbox)** | Lựa chọn thanh toán phụ, hiển thị trong UI như một phương thức thay thế | Tích hợp được ở môi trường Test mà không cần tài khoản Business, đủ để demo đa dạng phương thức thanh toán |
 
 ### 7.2 Luồng đồng bộ giao dịch (SePay)
 
@@ -330,17 +330,57 @@ MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số th
 ### 7.4 Ghi chú triển khai thực tế
 
 - Giai đoạn demo/đồ án: dùng PayOS thật (có sandbox miễn phí) + MoMo sandbox — không cần giấy phép kinh doanh.
-- Nếu sau này muốn vận hành thật với MoMo, cần đăng ký tài khoản Business (M4B) qua doanh nghiệp — có thể để ngỏ hướng mở rộng này trong phần "Hướng phát triển" của báo cáo.
+- Nếu sau này muốn vận hành thật với MoMo, cần đăng ký tài khoản Business (M4B) qua doanh nghiệp.
 - SePay có gói miễn phí giới hạn số lượng giao dịch/tháng — đủ dùng cho quy mô demo nhóm nhỏ.
 
 ---
 
-## 8. Roadmap thực hiện
+## 8. Deploy
+
+### Frontend — Vercel
+
+1. Push code lên GitHub.
+2. Vào [vercel.com](https://vercel.com) → Import project → chọn repo.
+3. Vercel tự nhận diện Next.js, không cần chỉnh gì thêm.
+4. Set environment variable trong Vercel Dashboard:
+   ```
+   NEXT_PUBLIC_API_URL = https://your-backend-domain.com
+   ```
+5. Deploy — mỗi lần push lên main là tự động deploy lại.
+
+### Backend — VPS / Railway / Fly.io
+
+Backend Go biên dịch thành single binary, có thể deploy lên bất kỳ VPS nào, hoặc dùng Railway/Fly.io để auto-deploy từ GitHub.
+
+```bash
+# Build
+cd backend && go build -o server .
+
+# Run
+DATABASE_URL=postgres://... ./server
+```
+
+### Local Development
+
+```bash
+# Khởi động PostgreSQL
+docker-compose up -d postgres
+
+# Backend
+cd backend && go run .
+
+# Frontend
+cd frontend && npm install && npm run dev
+```
+
+---
+
+## 9. Roadmap thực hiện
 
 | Giai đoạn | Nội dung |
 |---|---|
 | Tuần 1 | Setup database schema, khởi tạo Go backend (CRUD groups, users, expenses cơ bản) |
-| Tuần 2 | Viết thuật toán Minimize Cash Flow bằng C++, tích hợp qua cgo vào Go backend |
+| Tuần 2 | Viết thuật toán Minimize Cash Flow bằng Go (`container/heap`), tích hợp vào handler |
 | Tuần 3 | Tích hợp webhook SePay, xử lý và lưu bank_transactions |
 | Tuần 4 | Frontend Next.js: tạo nhóm, chọn giao dịch ngân hàng để tạo expense, xem balance |
 | Tuần 5 | Sinh QR thanh toán cho settlement (PayOS + MoMo), xác nhận tự động qua webhook |
