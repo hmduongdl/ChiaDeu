@@ -347,11 +347,3 @@ MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số th
 | Tuần 6 | PWA polish, testing, viết báo cáo DSA (chứng minh độ phức tạp thuật toán) |
 
 ---
-
-## 9. Điểm nhấn khi trình bày trước lớp
-
-- Ứng dụng thực tế, giải quyết đúng nhu cầu chia tiền nhóm bạn bè, có thể demo trực tiếp bằng giao dịch ngân hàng thật.
-- Thể hiện rõ kiến thức DSA: Heap, Greedy algorithm, độ phức tạp O(N log N), có thể chứng minh bằng toán học trong báo cáo.
-- Kiến trúc đa ngôn ngữ (Go + C++ qua cgo) cho thấy khả năng tích hợp hệ thống thực tế, không chỉ code thuật toán đơn lẻ.
-- Tự động hoá hoàn toàn luồng xác nhận thanh toán qua webhook, không cần thao tác thủ công — điểm khác biệt so với các bài Splitwise clone thông thường.
-- Kiến trúc đa cổng thanh toán (SePay + PayOS + MoMo) cho thấy tư duy thiết kế hệ thống thực tế: không phụ thuộc một nhà cung cấp, dễ mở rộng, và khả thi để triển khai ngay với tài khoản cá nhân thay vì phải chờ đăng ký doanh nghiệp.
