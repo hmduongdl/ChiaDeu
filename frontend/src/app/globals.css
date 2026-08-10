@@ -1,0 +1,14 @@
+/* ============================================================================
+ * globals.css — Styles toàn cục với Tailwind CSS
+ * ============================================================================
+ * @tailwind directives import các layer của Tailwind: base, components, utilities.
+ * body được style mặc định với nền xám nhạt và chữ tối màu.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}

@@ -1,0 +1,65 @@
+# ============================================================================
+# Docker Compose — Môi trường phát triển toàn bộ hệ thống
+# ============================================================================
+# 3 services:
+#   postgres:  PostgreSQL 16 (database)
+#   backend:   Go API server (Fiber) trên cổng 8080
+#   frontend:  Next.js PWA trên cổng 3000
+#
+# Khởi động: docker-compose up -d
+# Dừng:      docker-compose down
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 — Database chính của hệ thống
+  # ---------------------------------------------------------------------------
+  # Dữ liệu được lưu trong volume pgdata để không mất khi restart container.
+  # Migration SQL tự động chạy khi container khởi động lần đầu (thư mục initdb.d).
+  postgres:
+    image: postgres:16-alpine                       # Phiên bản Alpine nhẹ
+    environment:
+      POSTGRES_DB: cashflow                         # Tên database
+      POSTGRES_USER: cashflow                       # Username
+      POSTGRES_PASSWORD: cashflow                   # Password (chỉ dùng cho dev)
+    ports:
+      - '5432:5432'                                 # Mở cổng cho host truy cập
+    volumes:
+      - pgdata:/var/lib/postgresql/data             # Volume lưu dữ liệu
+      - ./backend/migrations:/docker-entrypoint-initdb.d  # Tự động chạy migration
+
+  # ---------------------------------------------------------------------------
+  # Go Backend — REST API server (Fiber)
+  # ---------------------------------------------------------------------------
+  # Kết nối đến PostgreSQL qua DATABASE_URL.
+  # Cần build Dockerfile trong thư mục backend/.
+  backend:
+    build:
+      context: ./backend                            # Build từ thư mục backend/
+      dockerfile: Dockerfile
+    ports:
+      - '8080:8080'                                 # Map cổng 8080
+    environment:
+      DATABASE_URL: postgres://cashflow:cashflow@postgres:5432/cashflow?sslmode=disable
+      PORT: '8080'
+    depends_on:
+      - postgres                                    # Đợi PostgreSQL khởi động trước
+
+  # ---------------------------------------------------------------------------
+  # Next.js Frontend — PWA (React + TypeScript + Tailwind)
+  # ---------------------------------------------------------------------------
+  # Proxy /api/* sang backend qua next.config.js rewrites.
+  frontend:
+    build:
+      context: ./frontend                           # Build từ thư mục frontend/
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'                                 # Map cổng 3000
+    depends_on:
+      - backend                                     # Đợi backend khởi động trước
+
+# Volume lưu dữ liệu PostgreSQL (tồn tại sau khi docker-compose down)
+volumes:
+  pgdata:
