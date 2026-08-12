@@ -13,16 +13,32 @@ import (
 func main() {
 	_ = godotenv.Load()
 
+	app := newApp()
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Fatal(app.Listen(":" + port))
+}
+
+func newApp() *fiber.App {
 	app := fiber.New()
 
 	app.Use(logger.New())
 	app.Use(cors.New())
 
-	app.Get("/api/health", func(c *fiber.Ctx) error {
+	registerAPIRoutes(app.Group("/api"))
+	registerAPIRoutes(app.Group("/api/backend"))
+
+	return app
+}
+
+func registerAPIRoutes(api fiber.Router) {
+	api.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
-
-	api := app.Group("/api")
 
 	// Auth
 	api.Post("/auth/link-bank", func(c *fiber.Ctx) error {
@@ -72,11 +88,4 @@ func main() {
 	api.Get("/settlements/:id/status", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"message": "not implemented"})
 	})
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Fatal(app.Listen(":" + port))
 }

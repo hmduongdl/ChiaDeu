@@ -337,28 +337,22 @@ MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số th
 
 ## 8. Deploy
 
-### Frontend — Vercel
+### Vercel Services — Frontend + Backend
 
-1. Push code lên GitHub.
-2. Vào [vercel.com](https://vercel.com) → Import project → chọn repo.
-3. Vercel tự nhận diện Next.js, không cần chỉnh gì thêm.
-4. Set environment variable trong Vercel Dashboard:
-   ```
-   NEXT_PUBLIC_API_URL = https://your-backend-domain.com
-   ```
-5. Deploy — mỗi lần push lên main là tự động deploy lại.
+File `vercel.json` ở thư mục gốc khai báo hai service và dùng chung một domain:
 
-### Backend — VPS / Railway / Fly.io
+- Next.js frontend phục vụ tất cả các URL thông thường.
+- Go backend phục vụ dưới prefix `/api/backend`.
+- Ví dụ health check production: `GET /api/backend/health`.
 
-Backend Go biên dịch thành single binary, có thể deploy lên bất kỳ VPS nào, hoặc dùng Railway/Fly.io để auto-deploy từ GitHub.
+Các bước deploy:
 
-```bash
-# Build
-cd backend && go build -o server .
+1. Push toàn bộ repository lên GitHub và import repository vào Vercel.
+2. Trong **Build and Deployment Settings**, chọn Framework Preset là **Services** và giữ Root Directory ở thư mục gốc repository.
+3. Khai báo các biến môi trường backend cần dùng, ví dụ `DATABASE_URL`, trong Vercel Dashboard.
+4. Deploy. Vercel sẽ build `frontend` và `backend` thành hai service trong cùng deployment.
 
-# Run
-DATABASE_URL=postgres://... ./server
-```
+Có thể chạy cấu hình Vercel Services trên máy bằng `vercel dev`. Khi chỉ chạy Next.js bằng `npm run dev`, rewrite trong `frontend/next.config.js` sẽ chuyển `/api/backend/*` đến backend ở `http://localhost:8080`.
 
 ### Local Development
 
