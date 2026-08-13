@@ -37,3 +37,19 @@
 - Tệp/thư mục thay đổi chính: `frontend/src/app/(protected)/{dashboard,groups,activity,profile}/`, `frontend/src/components/screens/`, `frontend/src/components/app/`, `frontend/src/components/BottomNavBar.tsx`, `frontend/src/middleware.ts`, `frontend/src/app/globals.css`, `frontend/public/figma/`, `update_log.md`.
 - Kiểm tra: `npx tsc --noEmit --pretty false` đạt; `npm run build` đạt, tạo đủ route và bundle riêng; smoke test dev server xác nhận cả bốn route chưa đăng nhập trả `307` về login đúng redirect và asset Figma trả `200`; `git diff --check` đạt; xác nhận 55 asset Figma có dữ liệu trên đĩa.
 - Giới hạn/theo dõi: số dư, danh sách nhóm và hoạt động hiện là dữ liệu trình diễn theo Figma; tìm kiếm/lọc và thao tác thông báo chạy ở client, chưa có API lưu bền. Các nút tạo nhóm, cài đặt và mục chi tiết profile mới dừng ở trạng thái giao diện cho tới khi có route/API tương ứng.
+
+## 2026-08-13 — Multi-creditor-only product documentation
+
+- Rewrote the product, schema, API target, business rules, permissions, settlement flow, roadmap, and beginner backend assignment around a single `MULTI_CREDITOR` model in which every active member can pay expenses.
+- Removed the legacy fixed-recipient mode, mode selection, leadership transfer flow, leader-specific data fields, resolver, dashboard, and exercises from the target documentation.
+- Defined a deterministic multi-creditor balance resolver, financial invariants, transaction boundaries, idempotency expectations, unified group permissions, and clearer separation between implemented authentication and planned business APIs.
+- Main changed files: `README.md`, `schema.md`, `phancong.md`, and `update_log.md`.
+- Validation: Markdown/reference consistency, stale terminology search, and `git diff --check` performed; application tests/build were not run because this change only updates documentation.
+- Known limitations/follow-up: the existing `001_init.sql` migration and placeholder business routes still reflect an earlier prototype and must be replaced through a safe follow-up migration and implementation. The documented resolver prioritizes deterministic, bounded transaction reduction and does not claim a globally minimal solution for every balance combination.
+
+## 2026-08-13 — Flexible splitting mode terminology
+
+- Standardized the user-facing name of the `MULTI_CREDITOR` model as “Chế độ chia đều linh hoạt” across the product overview, target schema, API description, roadmap, and backend assignment.
+- Main changed files: `README.md`, `schema.md`, `phancong.md`, and `update_log.md`.
+- Validation: searched the repository documentation to confirm the superseded Vietnamese label is absent; `git diff --check` passed. Application tests/build were not run because this is a terminology-only documentation change.
+- Known limitations/follow-up: `MULTI_CREDITOR` remains the internal technical identifier; UI copy should use “Chế độ chia đều linh hoạt” when the business screens are implemented.
