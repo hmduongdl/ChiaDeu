@@ -1,12 +1,4 @@
 # Chia Đều — chia tiền nhóm bạn bè / đi chơi
-
-*Tài liệu định hướng sản phẩm, yêu cầu nghiệp vụ và thiết kế hệ thống dự kiến*
-
-> **Trạng thái hiện tại:** dự án đã có phần xác thực tài khoản cơ bản. Các API nhóm, khoản
-> chi, thanh toán mô tả trong tài liệu này là **thiết kế mục tiêu**, chưa phải tính năng
-> backend đã hoàn thiện. Xem mục [16](#16-xác-thực-và-chạy-dự-án-hiện-tại) để biết phần đã
-> chạy được thật sự.
-
 ---
 
 ## Mục lục
