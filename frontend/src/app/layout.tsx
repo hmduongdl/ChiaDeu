@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import BottomNavBar from '@/components/BottomNavBar'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      <body className="min-h-screen bg-gray-50">{children}</body>
+      <body className="min-h-screen bg-gray-50">
+        {children}
+        <BottomNavBar />
+      </body>
     </html>
   )
 }
