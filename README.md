@@ -68,6 +68,7 @@ vụ lịch sử; chủ xị là vai trò hiện tại và có thể được ch
     không dùng `float` cho tính toán tài chính.
 12. Dữ liệu lịch sử phải giữ nguyên người trả, người nhận và cấu hình thanh toán tại thời
     điểm phát sinh, kể cả sau khi đổi chủ xị.
+13. Trưởng nhóm bắt buộc phải liên kết sePay để tạo nhóm, còn user bình thường khi tham gia nhóm khác thì không cần.
 
 ## 4. Vai trò và quyền hạn
 
