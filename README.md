@@ -64,6 +64,14 @@ Nếu chuyển từng khoản riêng lẻ → 3 giao dịch. Nhưng thực ra c�
 
 Điểm khác biệt so với thiết kế ban đầu: **toàn bộ backend là Go thuần**, không cần C++ shared library hay cgo bridge. Thuật toán Minimize Cash Flow được cài đặt trực tiếp trong Go package `algo/`, dùng `container/heap` của standard library. Cách này giúp codebase đồng nhất, build đơn giản (single binary), deploy dễ dàng.
 
+### Luồng authentication
+
+Frontend gửi login tới proxy same-origin `/api/auth/login` với `credentials: include`. Backend kiểm tra bcrypt rồi đặt access JWT 15 phút trong cookie HttpOnly/Secure/SameSite=Lax và refresh JWT 7 ngày trong cookie HttpOnly/Secure/SameSite=Strict chỉ dành cho `/api/auth/refresh`; token không được lưu trong Web Storage hoặc đọc bởi JavaScript. Khi API trả `401`, fetch client chỉ gọi refresh một lần cho các request đồng thời, nhận access cookie mới rồi retry request gốc. Nếu refresh thất bại, Zustand xóa user và chuyển về `/login`. Logout gọi `/api/auth/logout`, backend hết hạn cả hai cookie, sau đó frontend xóa auth state.
+
+Route middleware chỉ kiểm tra sự hiện diện của access cookie để redirect sớm; protected layout luôn gọi `/api/auth/me` để backend xác minh chữ ký, thời hạn và user thật. Cấu hình production cần hai JWT secret độc lập dài ít nhất 32 ký tự, HTTPS (`COOKIE_SECURE=true`), một `FRONTEND_ORIGIN` cụ thể, và nên giữ browser API URL là `/api` để Next middleware và Go backend cùng nhận cookie. Xem `.env.example` cho toàn bộ biến môi trường.
+
+Refresh JWT hiện là stateless và không được rotate/revoke phía server; logout xóa cookie phía browser nhưng không vô hiệu hóa ngay một token đã bị sao chép. Trước khi cần quản lý session theo thiết bị hoặc thu hồi tức thời, bổ sung `jti` cùng session store/revocation list.
+
 ---
 
 ## 4. Database Schema (PostgreSQL)

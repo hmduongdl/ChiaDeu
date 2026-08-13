@@ -1,6 +1,8 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+ARG BACKEND_URL=http://backend:8080
+ENV BACKEND_URL=$BACKEND_URL
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .

@@ -1,91 +1,131 @@
 package main
 
 import (
+	"context"
 	"log"
-	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/hmduongdl/ChiaDeu/internal/auth"
+	"github.com/hmduongdl/ChiaDeu/internal/config"
+	"github.com/hmduongdl/ChiaDeu/internal/handlers"
+	authmiddleware "github.com/hmduongdl/ChiaDeu/internal/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
+
+type appDependencies struct {
+	frontendOrigin string
+	authHandler    *handlers.AuthHandler
+	authMiddleware fiber.Handler
+}
 
 func main() {
 	_ = godotenv.Load()
 
-	app := newApp()
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	appConfig, err := config.Load()
+	if err != nil {
+		log.Fatalf("load configuration: %v", err)
 	}
 
-	log.Fatal(app.Listen(":" + port))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, appConfig.DatabaseURL)
+	if err != nil {
+		log.Fatalf("create database pool: %v", err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("connect to database: %v", err)
+	}
+
+	tokens, err := auth.NewTokenManager(appConfig.JWTAccessSecret, appConfig.JWTRefreshSecret)
+	if err != nil {
+		log.Fatalf("configure JWT: %v", err)
+	}
+	authService := auth.NewService(auth.NewPostgresUserStore(pool))
+	authHandler := handlers.NewAuthHandler(authService, tokens, handlers.CookieConfig{
+		Secure: appConfig.CookieSecure,
+		Domain: appConfig.CookieDomain,
+	})
+
+	app := newApp(appDependencies{
+		frontendOrigin: appConfig.FrontendOrigin,
+		authHandler:    authHandler,
+		authMiddleware: authmiddleware.AuthMiddleware(tokens),
+	})
+
+	log.Fatal(app.Listen(":" + appConfig.Port))
 }
 
-func newApp() *fiber.App {
+func newApp(dependencies appDependencies) *fiber.App {
 	app := fiber.New()
 
 	app.Use(logger.New())
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     dependencies.frontendOrigin,
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept",
+		AllowCredentials: true,
+	}))
 
-	registerAPIRoutes(app.Group("/api"))
-	registerAPIRoutes(app.Group("/api/backend"))
+	api := app.Group("/api")
+	registerHealthRoute(api)
+	if dependencies.authHandler != nil && dependencies.authMiddleware != nil {
+		registerAuthRoutes(api, dependencies.authHandler, dependencies.authMiddleware)
+		registerApplicationRoutes(api, dependencies.authMiddleware)
+	}
+	registerWebhookRoutes(api)
+
+	// Keep the existing deployment-prefixed health URL while auth stays canonical at /api/auth.
+	legacyAPI := app.Group("/api/backend")
+	registerHealthRoute(legacyAPI)
+	if dependencies.authMiddleware != nil {
+		registerApplicationRoutes(legacyAPI, dependencies.authMiddleware)
+	}
+	registerWebhookRoutes(legacyAPI)
 
 	return app
 }
 
-func registerAPIRoutes(api fiber.Router) {
+func registerHealthRoute(api fiber.Router) {
 	api.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
+}
 
-	// Auth
-	api.Post("/auth/link-bank", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
+func registerAuthRoutes(api fiber.Router, handler *handlers.AuthHandler, requireAuth fiber.Handler) {
+	authRoutes := api.Group("/auth")
+	authRoutes.Post("/register", handler.Register)
+	authRoutes.Post("/login", handler.Login)
+	authRoutes.Post("/refresh", handler.Refresh)
+	authRoutes.Post("/logout", handler.Logout)
+	authRoutes.Get("/me", requireAuth, handler.Me)
+}
 
-	// Webhooks
-	api.Post("/webhooks/sepay", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Post("/webhooks/payos", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Post("/webhooks/momo", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
+func registerApplicationRoutes(api fiber.Router, requireAuth fiber.Handler) {
+	protected := api.Group("", requireAuth)
 
-	// Transactions
-	api.Get("/transactions", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
+	protected.Post("/auth/link-bank", notImplemented)
+	protected.Get("/transactions", notImplemented)
+	protected.Post("/groups", notImplemented)
+	protected.Post("/groups/join/:shareCode", notImplemented)
+	protected.Get("/groups/:id", notImplemented)
+	protected.Post("/groups/:id/expenses", notImplemented)
+	protected.Get("/groups/:id/balances", notImplemented)
+	protected.Post("/groups/:id/settle", notImplemented)
+	protected.Post("/settlements/:id/qr", notImplemented)
+	protected.Get("/settlements/:id/status", notImplemented)
+}
 
-	// Groups
-	api.Post("/groups", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Post("/groups/join/:shareCode", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Get("/groups/:id", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Post("/groups/:id/expenses", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Get("/groups/:id/balances", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Post("/groups/:id/settle", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
+func registerWebhookRoutes(api fiber.Router) {
+	api.Post("/webhooks/sepay", notImplemented)
+	api.Post("/webhooks/payos", notImplemented)
+	api.Post("/webhooks/momo", notImplemented)
+}
 
-	// Settlements
-	api.Post("/settlements/:id/qr", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
-	api.Get("/settlements/:id/status", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "not implemented"})
-	})
+func notImplemented(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{"message": "not implemented"})
 }
