@@ -1,3 +1,9 @@
+// Package auth — tầng truy xuất dữ liệu người dùng.
+// File này định nghĩa:
+//   - UserStore interface:抽象 các thao tác CRUD với bảng users
+//   - PostgresUserStore: triển khai UserStore dùng pgxpool
+//   - Các lỗi sentinel: ErrEmailExists, ErrUserNotFound
+//   - Xử lý unique constraint violation (mã 23505) từ PostgreSQL
 package auth
 
 import (

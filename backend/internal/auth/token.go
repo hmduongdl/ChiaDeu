@@ -1,3 +1,9 @@
+// Package auth — quản lý JWT token.
+// File này cung cấp TokenManager để:
+//   - Tạo cặp access + refresh token (HS256, có issuer và expiry)
+//   - Xác thực token (kiểm tra chữ ký, thời hạn, loại token)
+//   - Phân biệt access token (15 phút) và refresh token (7 ngày)
+//   - Yêu cầu mỗi secret dài ít nhất 32 ký tự và khác nhau
 package auth
 
 import (

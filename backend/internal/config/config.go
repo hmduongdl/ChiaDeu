@@ -1,3 +1,11 @@
+// Package config nạp và validate cấu hình ứng dụng từ biến môi trường.
+// File này định nghĩa struct Config chứa:
+//   - Port: cổng server (mặc định 8080)
+//   - DatabaseURL: chuỗi kết nối PostgreSQL (bắt buộc)
+//   - FrontendOrigin: origin cho CORS (phải là http(s)://host)
+//   - JWT secrets: access và refresh (bắt buộc, mỗi cái >= 32 ký tự)
+//   - Cookie config: Secure, Domain
+// Hỗ trợ hàm envOrDefault và boolEnv để đọc biến môi trường an toàn.
 package config
 
 import (

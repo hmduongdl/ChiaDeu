@@ -1,3 +1,8 @@
+// Package auth — unit test cho TokenManager.
+// File này kiểm thử:
+//   - Access token và refresh token có thể verify riêng biệt
+//   - Token hết hạn bị từ chối
+//   - Secret quá ngắn hoặc trùng nhau bị từ chối khi khởi tạo
 package auth
 
 import (

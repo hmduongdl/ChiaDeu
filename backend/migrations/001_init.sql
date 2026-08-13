@@ -1,3 +1,13 @@
+-- Migration 001: Khởi tạo schema cơ sở dữ liệu Chia Đều.
+-- Tạo các bảng chính:
+--   users           - Người dùng (id, tên, email, phone, tài khoản ngân hàng, avatar)
+--   groups          - Nhóm chia tiền (id, tên, mã share_code, người tạo, tiền tệ)
+--   group_members   - Thành viên trong nhóm (quan hệ nhiều-nhiều giữa groups và users)
+--   bank_transactions - Giao dịch ngân hàng từ webhook (Sepay/PayOS/Momo)
+--   expenses        - Chi phí trong nhóm (người trả, số tiền, kiểu chia)
+--   expense_splits  - Phần chia của từng thành viên cho mỗi chi phí
+--   settlements     - Thanh toán bù trừ giữa các thành viên (trạng thái, QR code)
+-- Kèm các index cho hiệu năng truy vấn thường dùng.
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE users (

@@ -1,3 +1,7 @@
+// Package config — unit test cho Load().
+// File này kiểm thử:
+//   - FRONTEND_ORIGIN phải là origin hợp lệ (từ chối "*", ftp://, có path)
+//   - CookieSecure mặc định là true nếu không set biến môi trường
 package config
 
 import "testing"

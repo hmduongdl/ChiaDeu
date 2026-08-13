@@ -1,3 +1,10 @@
+// Trang đăng ký tài khoản mới (/register).
+// Chức năng:
+//   - Form: họ tên, email, mật khẩu, xác nhận mật khẩu
+//   - Validate mật khẩu khớp nhau trước khi gửi
+//   - Gọi API register, nếu thành công redirect sang /login?registered=1
+//   - Xử lý lỗi: email đã tồn tại (409), validation (400), lỗi mạng
+//   - Link đến /login nếu đã có tài khoản
 "use client";
 
 import Link from "next/link";

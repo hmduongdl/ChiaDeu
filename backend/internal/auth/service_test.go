@@ -1,3 +1,8 @@
+// Package auth — unit test cho AuthService.
+// File này kiểm thử:
+//   - Đăng ký hash mật khẩu và chuẩn hóa email
+//   - Xác thực từ chối sai mật khẩu
+//   - Validate input đăng ký (thiếu tên, email sai, mật khẩu ngắn)
 package auth
 
 import (

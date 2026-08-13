@@ -1,3 +1,9 @@
+// Component input dùng chung cho các form xác thực (đăng nhập, đăng ký, quên mật khẩu).
+// Props:
+//   - label: nhãn hiển thị phía trên input
+//   - icon (tùy chọn): icon SVG hiển thị bên trái input (dùng FigmaIcon)
+//   - Các props còn lại được truyền thẳng xuống thẻ <input> (type, placeholder, value, onChange, ...)
+// Style: bo góc 12px, viền xám xanh, nền trắng ngà.
 "use client";
 
 import type { InputHTMLAttributes } from "react";

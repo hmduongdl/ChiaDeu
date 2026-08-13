@@ -37,3 +37,12 @@
 - Tệp thay đổi chính: `README.md`, `update_log.md`.
 - Kiểm tra: rà soát nội dung Markdown, chạy `git diff --check` và kiểm tra các thuật ngữ/quy tắc chủ xị xuất hiện nhất quán; không chạy test/build vì thay đổi chỉ là tài liệu.
 - Giới hạn/theo dõi: cần xác minh mô hình tài khoản người nhận của PayOS trước khi chọn làm QR/payment-link provider; cần migration mới và triển khai backend ở các giai đoạn tiếp theo. MVP chưa hỗ trợ trả thiếu, trả thừa, nhiều giao dịch cho một settlement hoặc gộp nhiều settlement vào một giao dịch.
+
+## 2026-08-13 — Các màn hình chính và dock điều hướng từ Figma
+
+- Triển khai bốn màn hình mobile theo các frame Figma `Trang chủ` (`7:2`), `Nhóm (list)` (`25:678`), `Hoạt động` (`16:214`) và `Profile` (`16:2`) tại các route được bảo vệ `/dashboard`, `/groups`, `/activity` và `/profile`.
+- Kết nối dock với route thật bằng Next `Link`, đồng bộ trạng thái active từ pathname, giữ animation pill và chỉ render dock tại đúng bốn route trên. Bổ sung tìm kiếm/lọc nhóm, đánh dấu hoạt động đã đọc, phản hồi lời mời, dữ liệu người dùng từ auth store và đăng xuất thật ở trang cá nhân.
+- Mỗi route dùng dynamic import và loading skeleton riêng; kết quả build xác nhận từng route có bundle độc lập. Toàn bộ 55 avatar/icon Figma cần dùng đã được tải về `frontend/public/figma/`, không còn phụ thuộc URL asset tạm thời.
+- Tệp/thư mục thay đổi chính: `frontend/src/app/(protected)/{dashboard,groups,activity,profile}/`, `frontend/src/components/screens/`, `frontend/src/components/app/`, `frontend/src/components/BottomNavBar.tsx`, `frontend/src/middleware.ts`, `frontend/src/app/globals.css`, `frontend/public/figma/`, `update_log.md`.
+- Kiểm tra: `npx tsc --noEmit --pretty false` đạt; `npm run build` đạt, tạo đủ route và bundle riêng; smoke test dev server xác nhận cả bốn route chưa đăng nhập trả `307` về login đúng redirect và asset Figma trả `200`; `git diff --check` đạt; xác nhận 55 asset Figma có dữ liệu trên đĩa.
+- Giới hạn/theo dõi: số dư, danh sách nhóm và hoạt động hiện là dữ liệu trình diễn theo Figma; tìm kiếm/lọc và thao tác thông báo chạy ở client, chưa có API lưu bền. Các nút tạo nhóm, cài đặt và mục chi tiết profile mới dừng ở trạng thái giao diện cho tới khi có route/API tương ứng.

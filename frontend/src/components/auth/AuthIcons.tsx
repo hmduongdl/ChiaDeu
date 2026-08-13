@@ -1,3 +1,7 @@
+// Tập trung tất cả asset icon dùng trong các màn hình xác thực.
+// - authAssets: object chứa URL icon SVG từ Figma cho login, register, forgot-password
+// - FigmaIcon: component nhỏ hiển thị icon từ URL (dùng thẻ <img>)
+// Tách riêng để dễ bảo trì khi cần đổi icon hoặc chuyển sang sprite sheet.
 "use client";
 
 export const authAssets = {

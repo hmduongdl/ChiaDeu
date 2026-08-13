@@ -1,3 +1,12 @@
+// Trang đăng nhập (/login).
+// Chức năng:
+//   - Form email + password với validation phía client
+//   - Nút hiện/ẩn mật khẩu
+//   - Gọi API login qua useAuthStore, redirect về dashboard hoặc trang trước đó
+//   - Hiển thị thông báo lỗi từ API (sai email/password, lỗi mạng)
+//   - Hiển thị banner "Tạo tài khoản thành công" khi được redirect từ /register
+//   - Link đến /forgot-password và /register
+// Bọc trong Suspense để tương thích với useSearchParams().
 "use client";
 
 import Link from "next/link";

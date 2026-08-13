@@ -1,3 +1,13 @@
+// Zustand store quản lý trạng thái xác thực người dùng.
+// Cung cấp:
+//   - user: thông tin người dùng hiện tại (null nếu chưa đăng nhập)
+//   - isLoading: đang kiểm tra/xử lý xác thực
+//   - isAuthenticated: đã xác thực thành công
+//   - login(email, password): gọi API đăng nhập, lưu user vào store
+//   - register(name, email, password): gọi API đăng ký
+//   - logout(): gọi API đăng xuất, reset toàn bộ state
+//   - fetchCurrentUser(): gọi GET /auth/me để kiểm tra session
+// Khi nhận 401 từ API (token hết hạn), tự động redirect về /login.
 "use client";
 
 import { create } from "zustand";

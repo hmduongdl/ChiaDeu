@@ -1,3 +1,10 @@
+// Package main khởi tạo và chạy server API của ứng dụng Chia Đều.
+// File này chịu trách nhiệm:
+//   - Nạp cấu hình từ biến môi trường
+//   - Kết nối database PostgreSQL
+//   - Khởi tạo JWT token manager và auth service
+//   - Đăng ký các route API (health, auth, nghiệp vụ, webhook)
+//   - Cấu hình CORS và logging middleware
 package main
 
 import (

@@ -1,3 +1,5 @@
+// Trang chủ (landing page) — hiển thị logo "Chia Đều" và tagline.
+// Đây là route "/" mặc định, không yêu cầu đăng nhập.
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">

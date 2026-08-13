@@ -1,3 +1,8 @@
+// Package middleware chứa các HTTP middleware cho Fiber.
+// File này cung cấp:
+//   - AuthMiddleware: kiểm tra accessToken cookie, verify JWT, lưu userID vào Locals
+//   - UserID: helper lấy userID từ context sau khi middleware đã xác thực
+// Nếu token không hợp lệ hoặc thiếu, trả về 401 Unauthorized.
 package middleware
 
 import (

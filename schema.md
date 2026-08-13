@@ -8,11 +8,12 @@
 
 ## 1. Dự án này làm gì? (tóm tắt 3 câu)
 
-ChiaDeu là app chia tiền nhóm kiểu "chủ xị" — 1 người trong nhóm đứng ra trả tiền trước
-(ăn uống, du lịch...), những người còn lại xem mình nợ bao nhiêu và trả lại cho người đó qua app.
-Khác với các app chia tiền khác (kiểu ai nợ ai), ở đây **mọi khoản nợ luôn chảy về 1 người** — chủ xị —
-nên logic tính toán đơn giản hơn nhiều.
-Mở rộng: Ngoài quan hệ thành viên và chủ xị - tối ưu cho cả các nhóm giống với app chia tiền khác (kiểu ai nợ ai) và hiện số tiền để các thành viên thanh toán.
+ChiaDeu là app chia tiền nhóm bạn bè sau mỗi lần đi chơi, ăn uống, du lịch. App hỗ trợ 2 chế độ:
+(1) **"chủ xị"** — 1 người trong nhóm đứng ra trả tiền trước, những người còn lại trả lại cho người đó;
+(2) **"ai nợ ai"** — nhiều người có thể thay nhau ứng tiền, hệ thống tự động tính ai trả ai với số
+giao dịch ít nhất (giống Splitwise).
+Cả 2 chế độ dùng chung 1 tầng tính net balance, chỉ khác ở cách sinh danh sách thanh toán cuối cùng.
+SePay là tính năng optional, tích hợp sau để tự động đối soát tiền vào — không cần liên kết SePay để tạo nhóm.
 ---
 
 ## 2. Sơ đồ tổng thể hệ thống
@@ -62,7 +63,8 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 | id | UUID | Mã nhóm |
 | name | text | Tên nhóm (VD: "Team đi Đà Lạt") |
 | created_by | UUID | Người tạo nhóm (ghi nhớ lịch sử, không đổi) |
-| leader_id | UUID | Chủ xị **hiện tại** (có thể đổi qua thời gian) |
+| leader_id | UUID | Chủ xị **hiện tại** (chỉ dùng trong chế độ "chủ xị", có thể đổi qua thời gian) |
+| settlement_mode | text | `SINGLE_CREDITOR` (chủ xị) hoặc `MULTI_CREDITOR` (ai nợ ai), chọn khi tạo nhóm |
 | share_code | text | Mã mời để người khác tham gia nhóm |
 | currency | text | Đơn vị tiền tệ, mặc định VND |
 
@@ -93,7 +95,7 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 |---|---|---|
 | id | UUID | Mã khoản chi |
 | group_id | UUID | Thuộc nhóm nào |
-| paid_by | UUID | Chủ xị đã trả khoản này (ghi lại tại thời điểm tạo) |
+| paid_by | UUID | Ai đã trả khoản này (chủ xị trong chế độ "chủ xị", bất kỳ thành viên nào trong chế độ "ai nợ ai") |
 | description | text | Mô tả (VD: "Ăn tối nhà hàng X") |
 | amount_minor | integer | Tổng tiền, tính theo đơn vị nhỏ nhất (VND thì là đồng, KHÔNG dùng số thập phân) |
 | split_type | text | Kiểu chia: `EQUAL` (đều) / `PERCENT` (%) / `WEIGHT` (trọng số) / `CUSTOM` (tùy chỉnh) |
@@ -125,12 +127,19 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 | id | UUID | Mã khoản hoàn |
 | batch_id | UUID | Thuộc đợt chốt nào |
 | from_user_id | UUID | Ai phải trả |
-| to_user_id | UUID | Trả cho ai (luôn là chủ xị) |
+| to_user_id | UUID | Nhận tiền từ ai (chủ xị trong chế độ "chủ xị", thành viên được nhận trong chế độ "ai nợ ai") |
 | amount_minor | integer | Số tiền phải trả |
 | payment_code | text | Mã riêng để nhận diện khi chuyển khoản, VD `CD4F82A9` |
 | status | text | `PENDING` / `AWAITING_CONFIRMATION` / `PAID` / `CANCELLED` |
 | confirmation_source | text | Ai xác nhận: hệ thống tự động hay chủ xị tự tay xác nhận |
 | paid_at | timestamp | Thời điểm xác nhận đã trả |
+
+> **Ghi chú quan trọng:** "Trạng thái nợ" (`settlements.status`) và "trạng thái thanh toán qua
+> SePay" là hai khái niệm tách biệt. `status` phản ánh vòng đời nghiệp vụ của khoản nợ
+> (`PENDING` → `AWAITING_CONFIRMATION` → `PAID`), độc lập với việc có dùng SePay hay không.
+> `confirmation_source` chỉ ghi nhận nguồn xác nhận (`SEPAY_AUTO` hoặc `MANUAL_CONFIRMATION`),
+> không ảnh hưởng đến trạng thái nợ. Một khoản nợ có thể được xác nhận thủ công mà không cần
+> bất kỳ liên kết cổng thanh toán nào.
 
 ### 3.9 `bank_transactions` — Sổ giao dịch ngân hàng đồng bộ về (tự động)
 
@@ -251,23 +260,29 @@ struct mà 2 bạn đã định nghĩa trong `models/` — vì vậy đặt tên
 
 ---
 
-## 7. Vai trò 2 người dùng chính trong app (để hiểu dữ liệu dùng vào việc gì)
+## 7. Vai trò người dùng chính trong app (để hiểu dữ liệu dùng vào việc gì)
 
 | Vai trò | Họ thấy gì trên app | Dữ liệu backend cần cung cấp |
 |---|---|---|
-| **Chủ xị (Leader)** | Tạo khoản chi, chốt nợ, xác nhận ai đã trả | `Expense`, `SettlementBatch`, danh sách `Settlement` của cả nhóm |
-| **Thành viên (Member)** | Chỉ xem mình nợ bao nhiêu, báo đã chuyển khoản | Chỉ `Settlement` liên quan tới chính họ (`from_user_id` = họ) |
+| **Chủ xị (Leader)** — chế độ "chủ xị" | Tạo khoản chi, chốt nợ, xác nhận ai đã trả | `Expense`, `SettlementBatch`, danh sách `Settlement` của cả nhóm |
+| **Thành viên (Member)** — chế độ "chủ xị" | Chỉ xem mình nợ bao nhiêu, báo đã chuyển khoản | Chỉ `Settlement` liên quan tới chính họ (`from_user_id` = họ) |
+| **Thành viên** — chế độ "ai nợ ai" | Tạo khoản chi (mình là `paid_by`), xem toàn bộ nợ nhóm, báo đã chuyển | `Expense`, toàn bộ `Settlement` của nhóm, net balance từng người |
+
+Trong cả 2 chế độ, backend tính net balance giống nhau: `NetBalance = Tổng phần chia phải chịu - Tổng tiền đã ứng`. Sự khác biệt chỉ nằm ở bước sinh danh sách settlement: chế độ "chủ xị" tạo settlement hình sao về 1 người, chế độ "ai nợ ai" dùng min-cash-flow để tối giản giao dịch.
 
 ---
 
 ## 8. Lộ trình học tiếp theo (để 2 bạn hình dung đường đi)
 
 ```
-Bước 1 (hiện tại): Viết struct (class) + method đơn giản       <-- đang làm
+Bước 1 (hiện tại): Viết struct (class) + method đơn giản              <-- đang làm
 Bước 2: Kết nối struct với database PostgreSQL thật (repository)
-Bước 3: Viết hàm xử lý logic phức tạp hơn (services)
+Bước 3: Viết hàm xử lý logic phức tạp hơn (services):
+        - Net balance engine (chung cho cả 2 chế độ)
+        - Single-creditor resolver (hình sao về chủ xị)
+        - Multi-creditor resolver (min-cash-flow, ai nợ ai)
 Bước 4: Mở "cổng" để frontend gọi vào backend (API/handler)
-Bước 5: Tự động hóa nhận tiền qua ngân hàng (webhook)
+Bước 5: Tích hợp SePay optional (tự động hóa đối soát tiền vào)
 ```
 
 Mỗi bước sẽ có tài liệu riêng, đơn giản hóa dần — không cần lo về Bước 4, 5 lúc này.

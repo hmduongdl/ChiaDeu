@@ -222,6 +222,10 @@ func (s *Settlement) MarkAsPaid() {
 — nhận vào 1 danh sách "ai nợ bao nhiêu" (`map[string]int64`, key là `userID`, value là số tiền nợ),
 tự tạo ra danh sách `Settlement` tương ứng (mỗi người nợ > 0 thì tạo 1 settlement gửi về `leaderID`).
 
+**Mở rộng (không bắt buộc, làm khi rảnh):** thử viết hàm `MinCashFlow(balances map[string]int64) []Settlement`
+— thay vì mọi khoản đều gửi về 1 người, dùng thuật toán min-cash-flow để tối giản số giao dịch
+giữa các thành viên (giống cách Splitwise hoạt động). Đây là bài tập nâng cao cho chế độ "ai nợ ai".
+
 ---
 
 ## 4. Form theo dõi tiến độ

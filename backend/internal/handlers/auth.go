@@ -1,3 +1,11 @@
+// Package handlers xử lý HTTP request/response cho các endpoint.
+// File này triển khai AuthHandler với các handler:
+//   - Register: POST /api/auth/register — tạo tài khoản mới
+//   - Login: POST /api/auth/login — đăng nhập, set cookie access + refresh
+//   - Refresh: POST /api/auth/refresh — cấp lại access token từ refresh token
+//   - Logout: POST /api/auth/logout — xóa cookie
+//   - Me: GET /api/auth/me — trả về thông tin user đang đăng nhập
+// Cookie access token dùng HttpOnly + Lax, refresh token dùng HttpOnly + Strict + path hẹp.
 package handlers
 
 import (

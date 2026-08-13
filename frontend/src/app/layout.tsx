@@ -1,3 +1,8 @@
+// Root layout của ứng dụng Next.js.
+// - Đặt ngôn ngữ html là "vi" (tiếng Việt)
+// - Metadata: title "Chia Đều", description, PWA manifest
+// - Render children + BottomNavBar (thanh điều hướng dưới cùng)
+// - Body có nền xám nhạt (bg-gray-50) và chiều cao tối thiểu toàn màn hình
 import type { Metadata } from 'next'
 import BottomNavBar from '@/components/BottomNavBar'
 import './globals.css'

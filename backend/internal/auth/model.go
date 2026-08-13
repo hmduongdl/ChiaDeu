@@ -1,3 +1,6 @@
+// Package auth xử lý xác thực người dùng.
+// File này định nghĩa model User — cấu trúc dữ liệu cốt lõi đại diện
+// cho một người dùng trong hệ thống Chia Đều.
 package auth
 
 import "time"

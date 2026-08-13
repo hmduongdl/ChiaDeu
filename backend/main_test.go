@@ -1,3 +1,9 @@
+// Package main chứa integration test cho toàn bộ ứng dụng.
+// File này kiểm thử:
+//   - Route health check hoạt động
+//   - Luồng đăng nhập → lấy thông tin user → refresh token → đăng xuất
+//   - Auth middleware từ chối request không có token
+//   - CORS preflight trả về header cho phép credentialed request
 package main
 
 import (

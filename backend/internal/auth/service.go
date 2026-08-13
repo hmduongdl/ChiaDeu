@@ -1,3 +1,8 @@
+// Package auth — tầng nghiệp vụ xác thực.
+// File này chứa AuthService với các chức năng:
+//   - Register: đăng ký tài khoản mới (validate input, hash mật khẩu bằng bcrypt)
+//   - Authenticate: xác thực email/password (dùng dummy hash để chống timing attack)
+//   - CurrentUser: lấy thông tin user hiện tại từ ID
 package auth
 
 import (

@@ -1,3 +1,10 @@
+// Trang quên mật khẩu (/forgot-password).
+// Giao diện tĩnh (chưa kết nối API):
+//   - Header với nút quay lại /login
+//   - Icon chìa khóa lớn ở giữa
+//   - Form nhập email để nhận mã xác thực
+//   - Link quay lại trang đăng nhập
+// Hiện tại form không submit thực tế (handleSubmit chỉ preventDefault).
 "use client";
 
 import Link from "next/link";

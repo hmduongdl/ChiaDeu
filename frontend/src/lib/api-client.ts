@@ -1,3 +1,11 @@
+// API client cho toàn bộ frontend — wrapper quanh fetch().
+// Các chức năng chính:
+//   - apiFetch<T>(path, init): gọi API với base URL từ biến môi trường
+//   - Tự động gửi credentials: "include" để cookie HttpOnly được đính kèm
+//   - Khi nhận 401, tự động thử refresh token một lần (POST /auth/refresh)
+//   - Nếu refresh thất bại, gọi unauthorizedHandler (redirect về login)
+//   - ApiError class: bọc lỗi HTTP với status code và message
+//   - Deduplicate refresh request: nếu nhiều request cùng lúc bị 401, chỉ gọi refresh một lần
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
 
 type UnauthorizedHandler = () => void;
