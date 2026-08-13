@@ -1,3 +1,11 @@
+// Màn hình Trang chủ (Dashboard) — màn hình chính sau khi đăng nhập.
+// Gồm các phần:
+//   - Header: logo CHIADEU + avatar người dùng (bấm vào mở /profile)
+//   - Lời chào: "Xin chào, [tên]!" kèm slogan
+//   - Card tổng số dư: hiển thị net balance (+300.000đ mẫu), chia cột "Bạn nợ" / "Bạn được trả"
+//   - Danh sách nhóm: mỗi nhóm có icon, tên, avatar stack, trạng thái (nợ/được trả/đã thanh toán)
+//   - FAB (nút nổi) "Tạo nhóm mới" góc dưới phải, link sang /groups
+// Dữ liệu hiện tại là mock data, sẽ thay bằng API call sau.
 "use client";
 
 import Link from "next/link";

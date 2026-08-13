@@ -3,29 +3,29 @@
 *Tài liệu định hướng sản phẩm, yêu cầu nghiệp vụ và thiết kế hệ thống dự kiến*
 
 > Trạng thái hiện tại: dự án đã có phần xác thực tài khoản cơ bản. Các API nhóm, khoản chi,
-> thanh toán, SePay và PayOS trong tài liệu này là **thiết kế mục tiêu**, chưa phải tính năng
-> backend đã hoàn thiện.
+> thanh toán trong tài liệu này là **thiết kế mục tiêu**, chưa phải tính năng backend đã
+> hoàn thiện.
 
 ---
 
 ## 1. Tầm nhìn sản phẩm
 
-Chia Đều số hóa cách một nhóm bạn thường chia tiền sau mỗi lần đi chơi, ăn uống, du lịch:
+Chia Đều là ứng dụng chia tiền nhóm bạn bè sau mỗi lần đi chơi, ăn uống, du lịch. Không
+cần liên kết ngân hàng, không cần cổng thanh toán — mở app lên, nhập khoản chi, hệ thống
+tự tính ai nợ ai bao nhiêu.
 
-- App hỗ trợ hai chế độ tính nợ linh hoạt:
-  - **Chế độ “chủ xị” (single-creditor):** một người đứng ra ứng tiền và thanh toán các khoản
-    chi chung của nhóm. Các thành viên chỉ cần xem phần mình phải chịu và hoàn tiền lại cho
-    chủ xị. Chỉ tài khoản nhận tiền của chủ xị cần được cấu hình cho nhóm.
-  - **Chế độ “ai nợ ai” (multi-creditor):** nhiều thành viên có thể thay nhau ứng tiền.
-    Hệ thống dùng thuật toán min-cash-flow để tối giản số giao dịch thanh toán giữa các
-    thành viên, giống cách Splitwise vận hành.
-- Cả hai chế độ dùng chung một tầng tính net balance, chỉ khác nhau ở tầng “resolver” khi
-  sinh danh sách giao dịch thanh toán.
-- SePay là tính năng optional, tích hợp ở bước thanh toán để tạo QR/link và tự động đối
-  soát tiền vào. Nhóm vẫn dùng được hoàn toàn ở chế độ thủ công nếu không liên kết SePay.
+App hỗ trợ hai chế độ tính nợ linh hoạt:
 
-Mục tiêu của sản phẩm là một ứng dụng chia tiền nhóm bạn bè đơn giản, dễ dùng, không yêu cầu
-người dùng phải liên kết tài khoản ngân hàng hay cổng thanh toán để bắt đầu sử dụng.
+- **Chế độ "chủ xị" (single-creditor):** một người đứng ra ứng tiền và thanh toán các khoản
+  chi chung của nhóm. Các thành viên chỉ cần xem phần mình phải chịu và hoàn tiền lại cho
+  chủ xị.
+- **Chế độ "ai nợ ai" (multi-creditor):** nhiều thành viên có thể thay nhau ứng tiền.
+  Hệ thống dùng thuật toán min-cash-flow để tối giản số giao dịch thanh toán giữa các
+  thành viên, giống cách Splitwise vận hành.
+
+Cả hai chế độ dùng chung một tầng tính net balance, chỉ khác nhau ở tầng "resolver" khi
+sinh danh sách giao dịch thanh toán. Mọi xác nhận thanh toán đều thực hiện thủ công trong
+app: thành viên báo "đã trả", người nhận xác nhận "đã nhận".
 
 ## 2. Thuật ngữ
 
@@ -33,15 +33,14 @@ người dùng phải liên kết tài khoản ngân hàng hay cổng thanh toá
 |---|---|
 | Nhóm (`Group`) | Không gian ghi nhận khoản chi và công nợ của một nhóm người |
 | Chủ xị (`Leader`) | Trong chế độ "chủ xị": thành viên đang ứng tiền, quản lý nhóm và nhận tiền hoàn lại |
-| Thành viên (`Member`) | Người tham gia chia chi phí, có thể là người ứng tiền (chế độ ai nợ ai) hoặc người trả nợ |
+| Thành viên (`Member`) | Người tham gia chia chi phí, có thể là người ứng tiền hoặc người trả nợ |
 | Chế độ nợ (`Settlement mode`) | `SINGLE_CREDITOR` (chủ xị) hoặc `MULTI_CREDITOR` (ai nợ ai), chọn khi tạo nhóm |
 | Khoản chi (`Expense`) | Một lần thành viên đã thanh toán cho nhóm |
 | Phần chia (`Expense split`) | Số tiền một thành viên phải chịu trong một khoản chi |
 | Kỳ chốt (`Settlement batch`) | Ảnh chụp công nợ tại thời điểm yêu cầu thanh toán |
 | Net balance | Số dư ròng của mỗi thành viên sau khi tổng hợp mọi khoản chi và phần chia |
 | Khoản hoàn (`Settlement`) | Khoản một thành viên phải trả cho người khác trong một kỳ chốt |
-| Mã thanh toán | Mã duy nhất, ví dụ `CD4F82A9`, dùng trong nội dung chuyển khoản |
-| Đối soát | Ghép giao dịch tiền vào với đúng khoản hoàn và cập nhật trạng thái |
+| Mã thanh toán | Mã duy nhất, ví dụ `CD4F82A9`, dùng để nhận diện khoản thanh toán |
 
 `created_by` và `leader_id` là hai khái niệm khác nhau. Người tạo nhóm được lưu để phục
 vụ lịch sử; chủ xị là vai trò hiện tại và có thể được chuyển cho thành viên khác (chỉ áp
@@ -58,20 +57,13 @@ không sử dụng.
 4. Trong chế độ "chủ xị", mọi khoản hoàn được tạo trong một kỳ chốt phải có người nhận
    là chủ xị của kỳ đó. Trong chế độ "ai nợ ai", hệ thống dùng min-cash-flow để xác định
    ai trả ai với số giao dịch tối thiểu.
-5. Thành viên không phải liên kết SePay, không nhập API key và không cấu hình tài khoản
-   nhận tiền.
-6. Tài khoản nhận tiền và cấu hình SePay thuộc phạm vi nhóm, không phải cấu hình toàn cục
-   áp dụng cho mọi nhóm mà người dùng tham gia.
-7. Mỗi khoản hoàn có một mã thanh toán duy nhất, không tái sử dụng.
-8. Chỉ webhook có mã khớp chính xác mới được tự động đánh dấu `PAID`.
-9. Khớp theo số tiền và thời gian chỉ tạo **gợi ý đối soát**, không tự động xác nhận khi
-   thiếu mã hoặc còn nhiều ứng viên.
-10. Nhóm không liên kết SePay vẫn tạo khoản chi, chốt nợ, sinh thông tin chuyển khoản và
-    xác nhận thủ công bình thường.
-11. Tiền được lưu bằng đơn vị nhỏ nhất của tiền tệ. Với VND, backend dùng số nguyên đồng;
-    không dùng `float` cho tính toán tài chính.
-12. Dữ liệu lịch sử phải giữ nguyên người trả, người nhận và cấu hình thanh toán tại thời
-    điểm phát sinh, kể cả sau khi đổi chủ xị hoặc đổi chế độ nợ.
+5. Mỗi khoản hoàn có một mã thanh toán duy nhất, không tái sử dụng.
+6. Tiền được lưu bằng đơn vị nhỏ nhất của tiền tệ. Với VND, backend dùng số nguyên đồng;
+   không dùng `float` cho tính toán tài chính.
+7. Dữ liệu lịch sử phải giữ nguyên người trả, người nhận tại thời điểm phát sinh, kể cả
+   sau khi đổi chủ xị hoặc đổi chế độ nợ.
+8. Thành viên không được tự đánh dấu `PAID` — chỉ người nhận tiền mới có quyền xác nhận
+   đã nhận.
 
 ## 4. Vai trò và quyền hạn
 
@@ -85,8 +77,6 @@ xem toàn bộ trạng thái hoàn tiền của nhóm.
 | Tạo/sửa/hủy khoản chi | Có | Không (*) |
 | Chọn cách chia khoản chi | Có | Không (*) |
 | Mở hoặc hủy kỳ chốt | Có | Không |
-| Cấu hình tài khoản nhận tiền của nhóm | Có | Không |
-| Liên kết/ngắt SePay cho nhóm | Có | Không |
 | Xem toàn bộ trạng thái hoàn tiền | Có | Chỉ khoản của mình (*) |
 | Yêu cầu xác nhận đã chuyển thủ công | Không | Có |
 | Xác nhận/từ chối yêu cầu thủ công | Có | Không |
@@ -94,7 +84,7 @@ xem toàn bộ trạng thái hoàn tiền của nhóm.
 | Rời nhóm | Chỉ sau khi chuyển vai trò | Khi không còn nghĩa vụ đang mở |
 
 (*) Trong chế độ "ai nợ ai", mọi thành viên đều có quyền tạo khoản chi và xem toàn bộ
-trạng thái hoàn tiền. |
+trạng thái hoàn tiền.
 
 Mọi quyền đều phải được backend kiểm tra từ membership hiện tại. Frontend ẩn nút không
 được xem là biện pháp phân quyền.
@@ -106,17 +96,10 @@ Mọi quyền đều phải được backend kiểm tra từ membership hiện t
 1. Người dùng tạo nhóm, chọn chế độ nợ ("chủ xị" hoặc "ai nợ ai") và tự động trở thành
    thành viên đầu tiên. Nếu chọn chế độ "chủ xị", người tạo đồng thời là chủ xị đầu tiên.
 2. Hệ thống sinh mã mời; người khác tham gia bằng mã hoặc liên kết mời.
-3. Trong chế độ "chủ xị", chủ xị có thể cấu hình tài khoản nhận tiền gồm tên ngân hàng,
-   số tài khoản và tên chủ tài khoản. Trong chế độ "ai nợ ai", mỗi thành viên có thể cấu
-   hình tài khoản nhận tiền riêng nếu muốn nhận thanh toán qua app.
-4. Không cần liên kết SePay hay bất kỳ cổng thanh toán nào để tạo nhóm và bắt đầu sử dụng.
-   SePay là bước tích hợp optional ở giai đoạn sau.
-5. Nếu liên kết SePay, backend lưu định danh tài khoản tích hợp và bắt đầu nhận webhook
-   tiền vào của tài khoản đó.
+3. Không cần bất kỳ liên kết ngân hàng hay cổng thanh toán nào để tạo nhóm và bắt đầu
+   sử dụng.
 
-Một người có thể là chủ xị ở nhóm A nhưng chỉ là thành viên ở nhóm B. Một tài khoản ngân
-hàng có thể được dùng cho nhiều nhóm; mã thanh toán vẫn giúp route giao dịch về đúng
-`group_id` và `settlement_id`.
+Một người có thể là chủ xị ở nhóm A nhưng chỉ là thành viên ở nhóm B.
 
 ### 5.2 Ghi nhận khoản chi
 
@@ -127,9 +110,6 @@ hàng có thể được dùng cho nhiều nhóm; mã thanh toán vẫn giúp ro
 4. Phần của chính người trả (`paid_by`) được ghi nhận là chi phí cá nhân, không tạo khoản
    hoàn cho chính họ.
 5. Phần của mỗi thành viên khác làm tăng net balance người đó nợ người trả.
-
-Nguồn khoản chi có thể là nhập tay hoặc một giao dịch tiền ra đã đồng bộ. Việc đồng bộ
-giao dịch tiền ra là tiện ích, không phải điều kiện để tạo khoản chi.
 
 ### 5.3 Chốt công nợ
 
@@ -169,45 +149,19 @@ Kỳ chốt là ảnh chụp bất biến. Khoản chi tạo sau thời điểm 
 Tại màn hình khoản cần trả, thành viên thấy:
 
 - Số tiền chính xác.
-- Tên người nhận và tài khoản nhận tiền (chủ xị trong chế độ “chủ xị”, hoặc thành viên
-  được nhận trong chế độ “ai nợ ai”).
-- Mã thanh toán bắt buộc.
-- QR có sẵn số tài khoản, số tiền và nội dung chuyển khoản nếu cấu hình hỗ trợ.
+- Tên người nhận.
+- Mã thanh toán để ghi vào nội dung chuyển khoản.
 - Trạng thái cập nhật gần thời gian thực.
-- Nút “Tôi đã chuyển khoản” cho chế độ thủ công hoặc khi tự động đối soát chưa nhận ra.
+- Nút "Tôi đã chuyển khoản" để báo đã thanh toán.
 
-QR chỉ là phương tiện điền thông tin chuyển khoản. Cần xác minh riêng khả năng của từng
-nhà cung cấp trước khi khẳng định PayOS có thể chuyển tiền trực tiếp về tài khoản động của
-từng chủ xị. MVP có thể dùng VietQR theo tài khoản nhóm và SePay để đối soát tiền vào;
-PayOS chỉ bật khi mô hình tài khoản người nhận và hợp đồng tích hợp đã được xác nhận.
+### 5.5 Xác nhận thanh toán
 
-### 5.5 Đối soát tự động qua SePay
-
-Khi nhận webhook tiền vào, backend xử lý theo thứ tự:
-
-1. Xác minh webhook theo cơ chế được nhà cung cấp hỗ trợ và từ chối payload không hợp lệ.
-2. Dùng mã giao dịch bên cung cấp làm idempotency key để không ghi nhận hai lần.
-3. Xác định cấu hình nhận tiền từ tài khoản đã nhận giao dịch (theo nhóm trong chế độ
-   "chủ xị", hoặc theo cá nhân trong chế độ "ai nợ ai").
-4. Chuẩn hóa nội dung và tìm mã thanh toán theo định dạng cho phép.
-5. Yêu cầu mã thuộc một settlement `PENDING`, đúng nhóm và số tiền khớp tuyệt đối.
-6. Lưu giao dịch ngân hàng, liên kết settlement rồi chuyển settlement sang `PAID` trong
-   cùng một database transaction.
-7. Ghi nguồn xác nhận là `SEPAY_AUTO` và thời điểm thanh toán.
-
-Nếu không có mã, sai số tiền, trùng ứng viên hoặc settlement đã đóng, giao dịch đi vào
-hàng đợi `UNMATCHED`/`REVIEW_REQUIRED`. Hệ thống có thể xếp hạng gợi ý dựa trên số tiền,
-thời gian và tên người gửi, nhưng chỉ chủ xị được quyết định ghép thủ công.
-
-### 5.6 Xác nhận thủ công
-
-1. Thành viên nhấn “Tôi đã chuyển khoản”, có thể đính kèm ghi chú hoặc ảnh biên lai.
+1. Thành viên nhấn "Tôi đã chuyển khoản", có thể đính kèm ghi chú hoặc ảnh biên lai.
 2. Settlement chuyển từ `PENDING` sang `AWAITING_CONFIRMATION`; trạng thái này chưa được
    tính là đã thanh toán.
-3. Người nhận tiền (chủ xị trong chế độ “chủ xị”, hoặc thành viên được nhận trong chế độ
-   “ai nợ ai”) kiểm tra tài khoản và chọn xác nhận hoặc từ chối.
-4. Xác nhận chuyển thành `PAID` với nguồn `MANUAL_CONFIRMATION`; từ chối đưa về `PENDING`
-   và lưu lý do.
+3. Người nhận tiền (chủ xị trong chế độ "chủ xị", hoặc thành viên được nhận trong chế độ
+   "ai nợ ai") kiểm tra tài khoản và chọn xác nhận hoặc từ chối.
+4. Xác nhận chuyển thành `PAID`; từ chối đưa về `PENDING` và lưu lý do.
 
 Thành viên không được tự đánh dấu `PAID`, vì đây là trạng thái xác nhận tiền đã đến người
 nhận chứ không chỉ là tuyên bố đã gửi.
@@ -219,9 +173,9 @@ nhận chứ không chỉ là tuyên bố đã gửi.
 ```text
 PENDING ──thành viên báo đã trả──> AWAITING_CONFIRMATION
    │                                      │
-   │ webhook khớp chính xác               ├──người nhận từ chối──> PENDING
+   │                                      ├──người nhận từ chối──> PENDING
    │                                      │
-   ├──────────────────────────────────────┴──xác nhận──> PAID
+   └──────────────────────────────────────┴──xác nhận──> PAID
    │
    └──hủy kỳ chốt──────────────────────────────────────> CANCELLED
 ```
@@ -229,59 +183,37 @@ PENDING ──thành viên báo đã trả──> AWAITING_CONFIRMATION
 `PAID` và `CANCELLED` là trạng thái kết thúc. Sửa một settlement đã kết thúc phải thông
 qua nghiệp vụ điều chỉnh có audit log, không cập nhật trực tiếp làm mất lịch sử.
 
-### 6.2 Cấu hình thanh toán
-
-Trong chế độ "chủ xị", cấu hình thanh toán thuộc phạm vi nhóm. Trong chế độ "ai nợ ai",
-mỗi thành viên có thể cấu hình tài khoản nhận tiền riêng (opt-in cá nhân).
-
-| Trạng thái | Ý nghĩa |
-|---|---|
-| `MANUAL` | Có thể hiện thông tin chuyển khoản nhưng không tự động đối soát |
-| `CONNECTING` | Đang thực hiện luồng liên kết nhà cung cấp |
-| `ACTIVE` | Webhook đang hoạt động và có thể tự đối soát |
-| `ERROR` | Liên kết lỗi, hết quyền hoặc webhook cần kiểm tra |
-| `DISCONNECTED` | Đã ngắt; quay về xác nhận thủ công |
-
 ## 7. Quy tắc đổi chủ xị (chỉ áp dụng cho chế độ "chủ xị")
 
 Đổi chủ xị là thay đổi người ứng tiền và người nhận của **các hoạt động tương lai**, không
 được làm thay đổi lịch sử.
 
-Để tránh thành viên quét QR cũ nhưng tiền đi vào tài khoản mới, bản MVP áp dụng quy tắc:
-
 1. Người nhận vai trò mới phải đang là thành viên nhóm.
-2. Không cho đổi khi còn kỳ chốt có settlement `PENDING` hoặc
-   `AWAITING_CONFIRMATION`.
+2. Không cho đổi khi còn kỳ chốt có settlement `PENDING` hoặc `AWAITING_CONFIRMATION`.
 3. Chủ xị cũ phải hoàn tất hoặc hủy kỳ đang mở trước khi chuyển vai trò.
-4. Sau khi chuyển, cấu hình SePay cũ bị ngắt khỏi hoạt động mới.
-5. Chủ xị mới cấu hình tài khoản nhận tiền hoặc chọn chế độ thủ công.
-6. Expense, batch, settlement và bank transaction cũ giữ snapshot người nhận cũ.
-7. Mọi lần chuyển vai trò phải ghi audit log gồm người thao tác, người cũ, người mới và
+4. Expense, batch, settlement cũ giữ snapshot người nhận cũ.
+5. Mọi lần chuyển vai trò phải ghi audit log gồm người thao tác, người cũ, người mới và
    thời gian.
-
-Giai đoạn sau có thể hỗ trợ nhiều “kỳ chủ xị” đồng thời, nhưng đổi lại UI và webhook
-routing phức tạp hơn. MVP ưu tiên quy tắc đóng kỳ trước khi chuyển.
 
 ## 8. Kiến trúc dự kiến
 
 ```text
 ┌──────────────────────────────────┐
 │ Next.js PWA                      │
-│ Nhóm, khoản chi, QR, trạng thái  │
+│ Nhóm, khoản chi, trạng thái      │
 │ hoàn tiền (2 chế độ nợ)          │
 └──────────────┬───────────────────┘
                │ REST/JSON + HttpOnly cookie
 ┌──────────────▼───────────────────┐
 │ Go/Fiber API                     │
 │ Auth, phân quyền, tính net       │
-│ balance, min-cash-flow resolver, │
-│ webhook và đối soát              │
-└───────┬─────────────┬────────────┘
-        │             │
-┌───────▼───────┐ ┌───▼─────────────────────┐
-│ PostgreSQL    │ │ SePay / QR provider     │
-│ Dữ liệu + log │ │ (optional, tích hợp sau)│
-└───────────────┘ └─────────────────────────┘
+│ balance, min-cash-flow resolver  │
+└──────────────┬───────────────────┘
+               │
+┌──────────────▼───────────────────┐
+│ PostgreSQL                       │
+│ Dữ liệu + audit log              │
+└──────────────────────────────────┘
 ```
 
 ### Công nghệ
@@ -289,11 +221,9 @@ routing phức tạp hơn. MVP ưu tiên quy tắc đóng kỳ trước khi chuy
 | Thành phần | Công nghệ dự kiến | Trách nhiệm |
 |---|---|---|
 | Frontend | Next.js, React, TypeScript, Tailwind CSS | PWA và trải nghiệm theo vai trò/chế độ nợ |
-| Backend | Go, Fiber | API, kiểm tra quyền, tính net balance, min-cash-flow và xử lý webhook |
+| Backend | Go, Fiber | API, kiểm tra quyền, tính net balance, min-cash-flow |
 | Database | PostgreSQL | Giao dịch dữ liệu, ràng buộc và audit |
-| Auth | JWT ngắn hạn + refresh cookie HttpOnly | Xác thực phiên hiện có |
-| Đối soát | SePay (optional) | Nhận biến động tiền vào, tự động đối soát |
-| QR/payment link | VietQR hoặc PayOS sau khi xác minh mô hình tích hợp | Điền sẵn thông tin hoàn tiền |
+| Auth | JWT ngắn hạn + refresh cookie HttpOnly | Xác thực phiên |
 
 ## 9. Mô hình dữ liệu đề xuất
 
@@ -301,9 +231,6 @@ routing phức tạp hơn. MVP ưu tiên quy tắc đóng kỳ trước khi chuy
 và **chưa được xem là đã đáp ứng tài liệu này**.
 
 ### 9.1 `users`
-
-Chỉ lưu hồ sơ và thông tin xác thực người dùng. Không đặt `sepay_account_id` hoặc tài khoản
-nhận tiền mặc định ở đây làm nguồn sự thật cho settlement.
 
 | Cột chính | Ý nghĩa |
 |---|---|
@@ -321,25 +248,11 @@ nhận tiền mặc định ở đây làm nguồn sự thật cho settlement.
 | `groups.share_code`, `currency` | Mời thành viên và đơn vị tiền |
 | `group_members(group_id, user_id)` | Thành viên và thời điểm tham gia |
 
-Ràng buộc “leader phải là member” nên được bảo vệ bằng transaction/service rule; nếu dùng
-ràng buộc database thì phải thiết kế khóa phù hợp để tránh trạng thái trung gian khi tạo nhóm.
+Ràng buộc "leader phải là member" nên được bảo vệ bằng transaction/service rule; nếu dùng
+ràng buộc database thì phải thiết kế khóa phù hợp để tránh trạng thái trung gian khi tạo
+nhóm.
 
-### 9.3 `group_payment_profiles`
-
-Một cấu hình nhận tiền cho mỗi nhóm (chế độ "chủ xị") hoặc mỗi thành viên (chế độ
-"ai nợ ai", opt-in cá nhân). Dữ liệu bí mật của nhà cung cấp phải mã hóa ở tầng ứng
-dụng hoặc lưu trong secret manager, không trả về frontend.
-
-| Cột chính | Ý nghĩa |
-|---|---|
-| `group_id` | Phạm vi cấu hình (nullable nếu là cấu hình cá nhân) |
-| `user_id` | Chủ sở hữu cấu hình (luôn có) |
-| `receiver_user_id` | Người nhận tiền tại thời điểm kích hoạt |
-| `bank_code`, `bank_account_no`, `account_name` | Thông tin sinh QR/hiển thị |
-| `provider`, `provider_account_id` | Nhà cung cấp và ID tích hợp, nullable ở manual mode |
-| `status`, `connected_at`, `disconnected_at` | Vòng đời liên kết |
-
-### 9.4 `expenses` và `expense_splits`
+### 9.3 `expenses` và `expense_splits`
 
 | Bảng/cột chính | Ý nghĩa |
 |---|---|
@@ -350,33 +263,27 @@ dụng hoặc lưu trong secret manager, không trả về frontend.
 | `expense_splits.user_id`, `share_minor` | Phần mỗi người phải chịu |
 | `expense_splits.settlement_batch_id` | Nullable cho đến khi được chốt |
 
-### 9.5 `settlement_batches` và `settlements`
+### 9.4 `settlement_batches` và `settlements`
 
 | Bảng/cột chính | Ý nghĩa |
 |---|---|
-| `settlement_batches.leader_id` | Snapshot chủ xị của kỳ chốt |
+| `settlement_batches.leader_id` | Snapshot chủ xị của kỳ chốt (nullable trong multi-creditor) |
 | `settlement_batches.status` | `OPEN`, `COMPLETED`, `CANCELLED` |
 | `settlements.from_user_id` | Thành viên trả tiền |
 | `settlements.to_user_id` | Người nhận tiền (chủ xị trong chế độ "chủ xị", thành viên được nhận trong chế độ "ai nợ ai"), snapshot bất biến |
 | `settlements.amount_minor` | Số tiền phải trả |
 | `settlements.payment_code` | Mã duy nhất, không đoán được và dễ nhập |
 | `settlements.status` | Trạng thái theo mục 6 |
-| `settlements.confirmation_source` | `SEPAY_AUTO`, `MANUAL_CONFIRMATION` hoặc null |
 | `settlements.paid_at` | Thời điểm xác nhận tiền đến |
 
 Nên có unique key `(batch_id, from_user_id)` để một thành viên chỉ có một settlement trong
 mỗi kỳ và unique index không phân biệt hoa/thường cho `payment_code`.
 
-### 9.6 `bank_transactions`, `reconciliation_candidates` và `audit_logs`
+### 9.5 `audit_logs`
 
 | Bảng | Mục đích |
 |---|---|
-| `bank_transactions` | Lưu webhook đã chuẩn hóa, raw payload được bảo vệ, provider transaction ID unique |
-| `reconciliation_candidates` | Gợi ý ghép không chắc chắn, điểm tin cậy và quyết định của chủ xị |
-| `audit_logs` | Lịch sử đổi vai trò, sửa chi phí, xác nhận/từ chối và ghép giao dịch |
-
-`bank_transactions` cần giữ `group_id`, payment profile và receiver snapshot để dữ liệu cũ
-không bị route lại khi nhóm đổi chủ xị hoặc thành viên thay đổi cấu hình nhận tiền.
+| `audit_logs` | Lịch sử đổi vai trò, sửa chi phí, xác nhận/từ chối thanh toán |
 
 ## 10. API mục tiêu
 
@@ -388,17 +295,8 @@ Các endpoint dưới đây là hợp đồng dự kiến, chưa khẳng định
 |---|---|
 | `POST /api/groups` | Tạo nhóm; body gồm `settlement_mode` (`SINGLE_CREDITOR` hoặc `MULTI_CREDITOR`). Người tạo là thành viên đầu tiên (và là chủ xị nếu chọn single-creditor) |
 | `POST /api/groups/join/:shareCode` | Tham gia nhóm |
-| `GET /api/groups/:id` | Lấy nhóm, vai trò, thành viên và trạng thái payment profile |
+| `GET /api/groups/:id` | Lấy nhóm, vai trò, thành viên |
 | `POST /api/groups/:id/transfer-leadership` | Chuyển chủ xị khi không còn settlement mở (chỉ áp dụng single-creditor) |
-
-### Cấu hình nhận tiền
-
-| Method & path | Chức năng |
-|---|---|
-| `PUT /api/groups/:id/payment-profile` | Cập nhật thông tin nhận tiền cho nhóm (single-creditor) |
-| `PUT /api/users/me/payment-profile` | Cập nhật thông tin nhận tiền cá nhân (multi-creditor, opt-in) |
-| `POST /api/groups/:id/sepay/connect` | Bắt đầu liên kết SePay (optional) |
-| `DELETE /api/groups/:id/sepay/connect` | Ngắt liên kết và chuyển về manual mode |
 
 ### Khoản chi và kỳ chốt
 
@@ -407,47 +305,34 @@ Các endpoint dưới đây là hợp đồng dự kiến, chưa khẳng định
 | `POST /api/groups/:id/expenses` | Tạo khoản chi và phần chia (chủ xị trong single-creditor, bất kỳ thành viên nào trong multi-creditor) |
 | `PATCH /api/groups/:id/expenses/:expenseId` | Sửa khoản chưa chốt |
 | `GET /api/groups/:id/balances` | Xem nợ chưa chốt theo thành viên |
-| `POST /api/groups/:id/settlement-batches` | Chốt nợ và tạo settlement hình sao |
+| `POST /api/groups/:id/settlement-batches` | Chốt nợ và tạo settlement |
 | `GET /api/groups/:id/settlement-batches/:batchId` | Xem tiến độ thu tiền của kỳ |
 
-### Thanh toán và đối soát
+### Thanh toán
 
 | Method & path | Chức năng |
 |---|---|
-| `GET /api/settlements/:id/payment-instructions` | Trả QR/payload và thông tin người nhận |
-| `POST /api/settlements/:id/mark-sent` | Thành viên yêu cầu xác nhận thủ công |
-| `POST /api/settlements/:id/confirm` | Chủ xị xác nhận đã nhận tiền |
-| `POST /api/settlements/:id/reject` | Chủ xị từ chối yêu cầu thủ công |
-| `POST /api/webhooks/sepay` | Nhận webhook công khai, có xác minh và idempotency |
-| `GET /api/groups/:id/reconciliation` | Chủ xị xem giao dịch chưa khớp và gợi ý |
-| `POST /api/groups/:id/reconciliation/:transactionId/match` | Chủ xị ghép thủ công với settlement |
+| `POST /api/settlements/:id/mark-sent` | Thành viên báo đã chuyển khoản |
+| `POST /api/settlements/:id/confirm` | Người nhận xác nhận đã nhận tiền |
+| `POST /api/settlements/:id/reject` | Người nhận từ chối yêu cầu |
 
 Các lệnh tạo/chốt/xác nhận nên nhận idempotency key từ client để tránh nhân đôi khi mạng
 chập chờn hoặc người dùng bấm lại.
 
 ## 11. Yêu cầu bảo mật và độ tin cậy
 
-- Không lưu API key, access token nhà cung cấp hoặc raw webhook nhạy cảm dưới dạng plain
-  text trong log.
-- Webhook không dùng phiên đăng nhập người dùng nhưng phải có xác minh nhà cung cấp,
-  chống replay nếu giao thức hỗ trợ và giới hạn kích thước payload.
-- Mọi webhook phải idempotent theo provider transaction ID.
-- Cập nhật bank transaction và settlement phải nằm trong cùng database transaction.
-- API trả dữ liệu theo nguyên tắc tối thiểu: thành viên không xem cấu hình bí mật hoặc giao
-  dịch ngân hàng không liên quan.
-- QR và payment instruction phải được tạo từ snapshot của settlement, không đọc mù quáng
-  cấu hình chủ xị mới nhất.
-- Mã thanh toán cần đủ entropy, không chứa thông tin cá nhân và được parse không phân biệt
-  hoa/thường nhưng không match theo chuỗi con quá rộng.
+- API trả dữ liệu theo nguyên tắc tối thiểu: thành viên không xem dữ liệu không liên quan
+  đến mình (trừ chế độ "ai nợ ai" nơi mọi người đều xem được toàn bộ).
+- Mã thanh toán cần đủ entropy, không chứa thông tin cá nhân.
 - Mọi hành động tài chính quan trọng phải có audit log.
 - Tiền dùng integer/decimal chính xác; validate currency và không cho số âm hoặc bằng 0.
+- Backend kiểm tra quyền từ membership hiện tại cho mọi request.
 
 ## 12. Yêu cầu UX
 
 ### Dashboard chủ xị (chế độ "chủ xị")
 
-- Tổng đã ứng, tổng chưa thu, tổng đã thu và giao dịch cần xem xét.
-- Trạng thái liên kết ngân hàng rõ ràng; lỗi SePay không chặn thao tác thủ công.
+- Tổng đã ứng, tổng chưa thu, tổng đã thu.
 - Danh sách ai chưa trả, ai báo đã chuyển và ai đã được xác nhận.
 - Cảnh báo và hướng dẫn đóng kỳ trước khi đổi chủ xị.
 
@@ -460,49 +345,38 @@ chập chờn hoặc người dùng bấm lại.
 
 ### Dashboard thành viên
 
-- Ưu tiên con số “Bạn cần trả” và “Bạn sẽ nhận” thay vì bảng balance phức tạp.
-- Hiển thị rõ người nhận/người trả, số tiền, mã thanh toán và một nút quét/sao chép.
-- Phân biệt “Đã báo chuyển” với “Đã xác nhận”; không dùng cùng màu/trạng thái.
-- Không xuất hiện màn hình liên kết SePay ép buộc; SePay là opt-in cá nhân.
+- Ưu tiên con số "Bạn cần trả" và "Bạn sẽ nhận" thay vì bảng balance phức tạp.
+- Hiển thị rõ người nhận/người trả, số tiền, mã thanh toán.
+- Phân biệt "Đã báo chuyển" với "Đã xác nhận"; không dùng cùng màu/trạng thái.
 
 ### Trạng thái rỗng và lỗi
 
-- Chưa có khoản chi: hướng dẫn chủ xị thêm khoản đầu tiên.
-- Chưa liên kết SePay: giải thích nhóm vẫn hoạt động ở chế độ thủ công.
-- Webhook chậm: cho phép báo đã chuyển và hiển thị “đang chờ đối soát”.
-- Sai nội dung chuyển khoản: hướng dẫn liên hệ chủ xị để ghép thủ công, không yêu cầu trả
-  lần hai ngay lập tức.
+- Chưa có khoản chi: hướng dẫn thêm khoản đầu tiên.
+- Sai nội dung chuyển khoản: hướng dẫn liên hệ người nhận để xác nhận thủ công.
 
 ## 13. Các trường hợp biên cần xử lý
 
 - Thành viên rời nhóm khi còn nợ hoặc còn settlement mở.
-- Chủ xị tự đưa mình ra khỏi phần chia của một expense.
+- Người trả tự đưa mình ra khỏi phần chia của một expense.
 - Tổng CUSTOM/PERCENT không bằng tổng expense do làm tròn.
 - Thành viên trả thiếu, trả thừa hoặc chia thành nhiều lần chuyển.
-- Hai settlement cùng số tiền được chuyển gần nhau nhưng không có mã.
-- Một giao dịch chứa nhiều chuỗi giống mã thanh toán.
-- Webhook bị gửi lặp, đến sai thứ tự hoặc đến sau khi đã xác nhận thủ công.
-- Chủ xị nhận tiền thủ công rồi sau đó webhook của cùng giao dịch xuất hiện.
 - Khoản chi bị sửa sau khi đã chốt.
 - Kỳ chốt bị hủy khi một số settlement đã `PAID`.
-- Tài khoản ngân hàng của chủ xị thay đổi trong khi còn QR chưa thanh toán.
-- Một payment profile được dùng bởi nhiều nhóm.
 
 Với MVP, không hỗ trợ trả một settlement bằng nhiều giao dịch hoặc gộp nhiều settlement
-vào một giao dịch. Các trường hợp trả thiếu/thừa đi vào hàng đợi để chủ xị xử lý thủ công;
-không tự động suy diễn.
+vào một giao dịch. Các trường hợp trả thiếu/thừa do người nhận xử lý thủ công; không tự
+động suy diễn.
 
 ## 14. Tiêu chí nghiệm thu MVP
 
-- Tạo nhóm tự gán người tạo làm chủ xị và thành viên đầu tiên trong một transaction.
-- Thành viên không thể gọi API tạo expense, cấu hình ngân hàng hoặc xác nhận nhận tiền.
-- Chủ xị tạo expense với các kiểu chia và backend từ chối tổng phần chia sai.
-- Chốt nợ tạo đúng một settlement cho mỗi thành viên còn nợ, tất cả cùng trả về chủ xị.
-- Mỗi settlement có mã duy nhất và payment instruction đúng snapshot người nhận.
-- Webhook lặp không tạo bank transaction hoặc ghi nhận thanh toán lần hai.
-- Webhook mã đúng + tiền đúng tự động chuyển `PENDING` thành `PAID`.
-- Webhook thiếu mã/sai tiền không tự động `PAID` và xuất hiện trong hàng đợi xem xét.
-- Manual mode hoạt động khi chưa có SePay.
+- Tạo nhóm tự gán người tạo làm thành viên đầu tiên (và chủ xị nếu single-creditor) trong
+  một transaction.
+- Thành viên không thể gọi API tạo expense hoặc xác nhận nhận tiền (trừ chế độ ai nợ ai).
+- Tạo expense với các kiểu chia và backend từ chối tổng phần chia sai.
+- Chốt nợ tạo đúng settlement theo chế độ: hình sao về chủ xị (single-creditor) hoặc
+  min-cash-flow (multi-creditor).
+- Mỗi settlement có mã duy nhất.
+- Thành viên báo đã trả → `AWAITING_CONFIRMATION`; người nhận xác nhận → `PAID`.
 - Không đổi được chủ xị khi còn settlement mở; lịch sử không đổi sau khi chuyển vai trò.
 - Tất cả hành động tài chính và đổi vai trò có audit log.
 
@@ -512,32 +386,29 @@ không tự động suy diễn.
 
 | Hạng mục | Nội dung |
 |---|---|
-| 1.1 Nhóm tự do | Tạo nhóm không cần liên kết ngân hàng, chọn chế độ nợ (`SINGLE_CREDITOR` hoặc `MULTI_CREDITOR`), membership, mã mời |
+| 1.1 Nhóm tự do | Tạo nhóm không cần liên kết gì, chọn chế độ nợ (`SINGLE_CREDITOR` hoặc `MULTI_CREDITOR`), membership, mã mời |
 | 1.2 Chi tiêu | Expense/split với các kiểu chia (đều, %, trọng số, tùy chỉnh), kiểm tra tổng tiền |
 | 1.3 Tính nợ | Net balance engine chung cho cả 2 chế độ |
 | 1.4 Resolver | Chốt nợ: single-creditor (hình sao về chủ xị) + multi-creditor (min-cash-flow) |
-| 1.5 Thanh toán thủ công | Payment code, QR tĩnh, đánh dấu đã trả/xác nhận thủ công, audit log |
+| 1.5 Thanh toán thủ công | Payment code, đánh dấu đã trả, xác nhận đã nhận, audit log |
 | 1.6 Chuyển chủ xị | Quy tắc đóng kỳ, lịch sử bất biến (chỉ cho single-creditor) |
 
-### Giai đoạn 2: Tích hợp SePay optional
+### Giai đoạn 2: Trải nghiệm nâng cao
 
 | Hạng mục | Nội dung |
 |---|---|
-| 2.1 Liên kết cá nhân | Opt-in SePay cho từng thành viên (không ép buộc), quản lý API key an toàn |
-| 2.2 QR/link thanh toán | QR động và payment link tích hợp thông tin chuyển khoản |
-| 2.3 Đối soát tự động | Webhook, exact match theo mã + số tiền, idempotency, review queue |
-| 2.4 Cấu hình nhận tiền | Payment profile theo nhóm (single-creditor) hoặc cá nhân (multi-creditor) |
+| 2.1 Thông báo | Push notification khi có khoản chi mới, khi được nhắc trả tiền, khi được xác nhận |
+| 2.2 Ảnh biên lai | Upload ảnh khi tạo khoản chi hoặc khi báo đã chuyển khoản |
+| 2.3 Lịch sử & báo cáo | Xem lại lịch sử chi tiêu theo nhóm, export CSV |
+| 2.4 Nhắc nợ | Gửi nhắc nhở tự động tới thành viên chưa thanh toán |
 
-### Giai đoạn 3: Monetize qua SePay
+### Giai đoạn 3: Mở rộng & hoàn thiện
 
 | Hạng mục | Nội dung |
 |---|---|
-| 3.1 Premium | Tính năng nâng cao cho người dùng trả phí (báo cáo, xuất dữ liệu, ưu tiên hỗ trợ) |
-| 3.2 Phí giao dịch | Phí nhỏ trên giao dịch qua SePay, miễn phí cho chế độ thủ công |
-| 3.3 Hoàn thiện | Thông báo, rate limit, quan sát hệ thống, test tích hợp và PWA polish |
-
-Nên hoàn thành luồng thủ công (giai đoạn 1) trước khi tích hợp SePay. Khi đó sản phẩm đã
-sử dụng được và webhook chỉ là lớp tự động hóa, không trở thành điểm lỗi duy nhất.
+| 3.1 PWA polish | Offline mode, cài đặt lên màn hình chính, animation |
+| 3.2 Đa tiền tệ | Hỗ trợ nhóm dùng USD, EUR... với tỉ giá |
+| 3.3 Hoàn thiện | Rate limit, quan sát hệ thống, test tích hợp |
 
 ## 16. Xác thực và chạy dự án hiện tại
 
@@ -566,4 +437,4 @@ cd frontend && npm install && npm run dev
 
 `vercel.json` ở thư mục gốc khai báo Next.js frontend và Go backend. API backend triển
 khai dưới prefix `/api/backend`; health check là `GET /api/backend/health`. Các API nghiệp
-vụ chủ xị trong mục 10 chỉ là hợp đồng mục tiêu cho các giai đoạn tiếp theo.
+vụ trong mục 10 chỉ là hợp đồng mục tiêu cho các giai đoạn tiếp theo.

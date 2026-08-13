@@ -1,3 +1,12 @@
+// Màn hình Nhóm (/groups) — quản lý danh sách nhóm chia tiền.
+// Chức năng:
+//   - Ô tìm kiếm nhóm theo tên (có hỗ trợ tiếng Việt không dấu)
+//   - Bộ lọc: Tất cả / Còn nợ / Được trả
+//   - Nút tạo nhóm mới (dấu +)
+//   - Danh sách nhóm dạng card: icon, tên nhóm, danh mục, avatar thành viên, số tiền nợ/được trả
+//   - Nhóm đã thanh toán xong hiển thị mờ (muted)
+//   - Hiển thị "Không tìm thấy nhóm phù hợp" khi không có kết quả
+// Dữ liệu hiện tại là mock data.
 "use client";
 
 import { useMemo, useState } from "react";

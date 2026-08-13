@@ -1,3 +1,10 @@
+// Layout bảo vệ cho các route cần đăng nhập.
+// Khi người dùng truy cập:
+//   1. Gọi fetchCurrentUser() để kiểm tra session (GET /auth/me)
+//   2. Hiển thị màn hình loading "Đang xác thực..." trong khi chờ
+//   3. Nếu không có user (chưa đăng nhập/token hết hạn) → redirect về /login
+//   4. Nếu có user → render children (nội dung trang được bảo vệ)
+// Các route con: /dashboard, /groups, /activity, /profile
 "use client";
 
 import { useEffect, useState } from "react";

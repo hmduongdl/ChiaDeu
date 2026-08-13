@@ -13,7 +13,7 @@ ChiaDeu là app chia tiền nhóm bạn bè sau mỗi lần đi chơi, ăn uốn
 (2) **"ai nợ ai"** — nhiều người có thể thay nhau ứng tiền, hệ thống tự động tính ai trả ai với số
 giao dịch ít nhất (giống Splitwise).
 Cả 2 chế độ dùng chung 1 tầng tính net balance, chỉ khác ở cách sinh danh sách thanh toán cuối cùng.
-SePay là tính năng optional, tích hợp sau để tự động đối soát tiền vào — không cần liên kết SePay để tạo nhóm.
+Mọi xác nhận thanh toán đều thực hiện thủ công trong app.
 ---
 
 ## 2. Sơ đồ tổng thể hệ thống
@@ -78,18 +78,7 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 
 *Ghi chú: 1 user có thể ở nhiều nhóm, mỗi nhóm nhiều user — đây gọi là quan hệ "nhiều-nhiều".*
 
-### 3.4 `group_payment_profiles` — Sổ tài khoản nhận tiền của chủ xị
-
-| Cột | Kiểu | Ý nghĩa |
-|---|---|---|
-| id | UUID | Mã cấu hình |
-| group_id | UUID | Thuộc nhóm nào |
-| receiver_user_id | UUID | Chủ xị nào sở hữu tài khoản này |
-| bank_code, bank_account_no, account_name | text | Thông tin ngân hàng để hiện QR |
-| provider | text | Có dùng dịch vụ tự động đối soát (SePay) hay không, để trống nghĩa là thủ công |
-| status | text | `MANUAL` / `CONNECTING` / `ACTIVE` / `ERROR` / `DISCONNECTED` |
-
-### 3.5 `expenses` — Sổ khoản chi
+### 3.4 `expenses` — Sổ khoản chi
 
 | Cột | Kiểu | Ý nghĩa |
 |---|---|---|
@@ -101,7 +90,7 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 | split_type | text | Kiểu chia: `EQUAL` (đều) / `PERCENT` (%) / `WEIGHT` (trọng số) / `CUSTOM` (tùy chỉnh) |
 | expense_date | date | Ngày phát sinh |
 
-### 3.6 `expense_splits` — Sổ chia phần của từng khoản chi
+### 3.5 `expense_splits` — Sổ chia phần của từng khoản chi
 
 | Cột | Kiểu | Ý nghĩa |
 |---|---|---|
@@ -111,16 +100,16 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 | share_minor | integer | Số tiền người đó phải chịu |
 | settlement_batch_id | UUID (có thể trống) | Đã được gộp vào đợt chốt nợ nào chưa |
 
-### 3.7 `settlement_batches` — Sổ đợt chốt nợ
+### 3.6 `settlement_batches` — Sổ đợt chốt nợ
 
 | Cột | Kiểu | Ý nghĩa |
 |---|---|---|
 | id | UUID | Mã đợt chốt |
 | group_id | UUID | Thuộc nhóm nào |
-| leader_id | UUID | Chủ xị của đợt này (ghi lại, không đổi dù sau này đổi chủ xị) |
+| leader_id | UUID | Chủ xị của đợt này (ghi lại, không đổi dù sau này đổi chủ xị; nullable trong chế độ "ai nợ ai") |
 | status | text | `OPEN` (đang mở) / `COMPLETED` / `CANCELLED` |
 
-### 3.8 `settlements` — Sổ khoản cần hoàn tiền
+### 3.7 `settlements` — Sổ khoản cần hoàn tiền
 
 | Cột | Kiểu | Ý nghĩa |
 |---|---|---|
@@ -131,27 +120,14 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 | amount_minor | integer | Số tiền phải trả |
 | payment_code | text | Mã riêng để nhận diện khi chuyển khoản, VD `CD4F82A9` |
 | status | text | `PENDING` / `AWAITING_CONFIRMATION` / `PAID` / `CANCELLED` |
-| confirmation_source | text | Ai xác nhận: hệ thống tự động hay chủ xị tự tay xác nhận |
 | paid_at | timestamp | Thời điểm xác nhận đã trả |
 
-> **Ghi chú quan trọng:** "Trạng thái nợ" (`settlements.status`) và "trạng thái thanh toán qua
-> SePay" là hai khái niệm tách biệt. `status` phản ánh vòng đời nghiệp vụ của khoản nợ
-> (`PENDING` → `AWAITING_CONFIRMATION` → `PAID`), độc lập với việc có dùng SePay hay không.
-> `confirmation_source` chỉ ghi nhận nguồn xác nhận (`SEPAY_AUTO` hoặc `MANUAL_CONFIRMATION`),
-> không ảnh hưởng đến trạng thái nợ. Một khoản nợ có thể được xác nhận thủ công mà không cần
-> bất kỳ liên kết cổng thanh toán nào.
+> **Ghi chú quan trọng:** `settlements.status` phản ánh vòng đời nghiệp vụ của khoản nợ
+> (`PENDING` → `AWAITING_CONFIRMATION` → `PAID`), hoàn toàn độc lập với bất kỳ cổng thanh
+> toán hay dịch vụ bên thứ ba nào. Mọi xác nhận đều do người dùng thực hiện thủ công
+> trong app: thành viên báo "đã chuyển", người nhận xác nhận "đã nhận".
 
-### 3.9 `bank_transactions` — Sổ giao dịch ngân hàng đồng bộ về (tự động)
-
-| Cột | Kiểu | Ý nghĩa |
-|---|---|---|
-| id | UUID | Mã giao dịch |
-| group_id | UUID | Thuộc nhóm nào |
-| provider_transaction_id | text | Mã giao dịch từ bên cung cấp dịch vụ ngân hàng (để tránh nhận trùng) |
-| amount_minor | integer | Số tiền đã nhận |
-| matched_settlement_id | UUID (có thể trống) | Đã ghép được với khoản hoàn nào chưa |
-
-### 3.10 `audit_logs` — Sổ nhật ký hành động quan trọng
+### 3.8 `audit_logs` — Sổ nhật ký hành động quan trọng
 
 | Cột | Kiểu | Ý nghĩa |
 |---|---|---|
@@ -164,11 +140,11 @@ Mỗi bảng dưới đây giống như 1 cuốn sổ có nhiều cột, mỗi d
 **Sơ đồ quan hệ giữa các bảng (đơn giản hóa):**
 
 ```
-users ──┬── group_members ──── groups ──── group_payment_profiles
+users ──┬── group_members ──── groups
         │                        │
         │                        ├── expenses ──── expense_splits
         │                        │
-        │                        └── settlement_batches ──── settlements ──── bank_transactions
+        │                        └── settlement_batches ──── settlements
         │
         └── (1 user có thể xuất hiện ở nhiều bảng: là leader, là expense payer, là settlement payer...)
 ```
@@ -207,13 +183,13 @@ backend/
 ├── main.go                     <-- điểm bắt đầu chạy chương trình
 ├── models/
 │   ├── user.go                 <-- struct User
-│   ├── group.go                <-- struct Group, GroupMember, GroupPaymentProfile
+│   ├── group.go                <-- struct Group, GroupMember
 │   ├── expense.go               <-- struct Expense, ExpenseSplit
 │   ├── settlement.go            <-- struct SettlementBatch, Settlement
-│   └── transaction.go           <-- struct BankTransaction, AuditLog
+│   └── audit.go                 <-- struct AuditLog
 ├── services/
 │   ├── expense_calc.go          <-- hàm chia tiền (EQUAL/PERCENT/WEIGHT/CUSTOM)
-│   └── settlement_calc.go       <-- hàm tính ai nợ ai bao nhiêu, tạo settlement
+│   └── settlement_calc.go       <-- hàm tính net balance, single-creditor resolver, min-cash-flow resolver
 └── repository/ (giai đoạn sau, khi học kết nối database)
     ├── user_repo.go
     ├── group_repo.go
@@ -227,13 +203,11 @@ backend/
 | `users` | `User` | `models/user.go` |
 | `groups` | `Group` | `models/group.go` |
 | `group_members` | `GroupMember` | `models/group.go` |
-| `group_payment_profiles` | `GroupPaymentProfile` | `models/group.go` |
 | `expenses` | `Expense` | `models/expense.go` |
 | `expense_splits` | `ExpenseSplit` | `models/expense.go` |
 | `settlement_batches` | `SettlementBatch` | `models/settlement.go` |
 | `settlements` | `Settlement` | `models/settlement.go` |
-| `bank_transactions` | `BankTransaction` | `models/transaction.go` |
-| `audit_logs` | `AuditLog` | `models/transaction.go` |
+| `audit_logs` | `AuditLog` | `models/audit.go` |
 
 ---
 
@@ -249,8 +223,9 @@ frontend/
 │           ├── expenses/                <-- màn hình khoản chi
 │           └── settlements/             <-- màn hình chốt nợ, thanh toán
 ├── components/
-│   ├── group/LeaderDashboard.tsx        <-- giao diện dành cho chủ xị
-│   └── group/MemberDashboard.tsx        <-- giao diện dành cho thành viên
+│   ├── group/LeaderDashboard.tsx        <-- giao diện dành cho chủ xị (chế độ "chủ xị")
+│   ├── group/MultiCreditorDashboard.tsx  <-- giao diện dành cho chế độ "ai nợ ai"
+│   └── group/MemberDashboard.tsx         <-- giao diện dành cho thành viên
 └── lib/api/                             <-- nơi gọi sang backend lấy dữ liệu
 ```
 
@@ -282,7 +257,6 @@ Bước 3: Viết hàm xử lý logic phức tạp hơn (services):
         - Single-creditor resolver (hình sao về chủ xị)
         - Multi-creditor resolver (min-cash-flow, ai nợ ai)
 Bước 4: Mở "cổng" để frontend gọi vào backend (API/handler)
-Bước 5: Tích hợp SePay optional (tự động hóa đối soát tiền vào)
 ```
 
-Mỗi bước sẽ có tài liệu riêng, đơn giản hóa dần — không cần lo về Bước 4, 5 lúc này.
+Mỗi bước sẽ có tài liệu riêng, đơn giản hóa dần — không cần lo về Bước 4 lúc này.

@@ -1,3 +1,11 @@
+// Màn hình Hoạt động (/activity) — timeline thông báo và sự kiện.
+// Gồm 2 phần:
+//   - HÔM NAY: các hoạt động mới nhất (có viền trái xanh, nền gradient nhạt)
+//     + Chi phí mới: Minh thêm "Ăn tối" trong nhóm "Chuyến đi Đà Lạt"
+//     + Lời mời tham gia nhóm: có nút "Tham gia" / "Từ chối" (tương tác được)
+//   - TRƯỚC ĐÓ: các hoạt động cũ hơn (nền trắng, viền xám)
+// Có nút "đánh dấu tất cả là đã đọc" và badge số lượng thông báo chưa đọc.
+// Dữ liệu hiện tại là mock data.
 "use client";
 
 import { useState } from "react";

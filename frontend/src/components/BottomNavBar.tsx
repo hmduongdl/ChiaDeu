@@ -1,3 +1,11 @@
+// Thanh điều hướng dưới cùng (Bottom Navigation Bar) — kiểu dock nổi.
+// Hiển thị 4 tab: Trang chủ, Nhóm, Hoạt động, Cá nhân.
+// Chỉ render trên các route chính (/dashboard, /groups, /activity, /profile).
+// Sử dụng Framer Motion:
+//   - LayoutGroup + layoutId để animate pill indicator khi chuyển tab
+//   - MotionConfig reducedMotion="user" tôn trọng tùy chọn accessibility
+// Icon dùng CSS mask với ảnh SVG từ Figma (đổi màu qua background-color).
+// Tab "Hoạt động" có chấm đỏ thông báo (hasNotification).
 "use client";
 
 import Link from "next/link";

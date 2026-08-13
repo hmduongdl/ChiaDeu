@@ -29,15 +29,6 @@
 - Validation: `go test ./...` passed; `npm run build` passed with compilation, static generation, and TypeScript checks; `git diff --check` passed. `npm run lint` could not run non-interactively because this repository has no ESLint configuration. Docker Compose/runtime database integration was not executed because Docker is unavailable in the environment.
 - Known limitations/follow-up: refresh tokens are stateless and are not rotated or server-revoked, so add a `jti` session store/revocation list when device sessions or immediate revocation are required. Existing users with no `password_hash` need a password reset path before password login. Detailed rate limiting remains a TODO. `npm audit --omit=dev` reports two high-severity advisories in the existing Next.js 14/PostCSS dependency chain; the offered automatic fix upgrades to breaking Next.js 16 and should be handled as a dedicated migration before production deployment. Production must use independent random JWT secrets, HTTPS with `COOKIE_SECURE=true`, and an explicit frontend origin.
 
-## 2026-08-13 — Định hướng thanh toán theo mô hình chủ xị
-
-- Viết lại `README.md` để xác định mỗi nhóm có một chủ xị là người ứng tiền và nhận toàn bộ khoản hoàn từ thành viên; thành viên không cần liên kết ngân hàng hoặc SePay.
-- Bổ sung chi tiết yêu cầu nghiệp vụ, ma trận phân quyền, luồng ghi chi/chốt nợ/QR/đối soát tự động và thủ công, trạng thái settlement, quy tắc đổi chủ xị, trường hợp biên, tiêu chí nghiệm thu và lộ trình MVP.
-- Đề xuất schema và API mục tiêu gắn payment profile/SePay với `group_id`, lưu snapshot người nhận, dùng settlement hình sao và hàng đợi review cho giao dịch không khớp chắc chắn. Làm rõ đây là tài liệu thiết kế; migration và API nghiệp vụ hiện tại chưa được triển khai theo mô hình mới.
-- Tệp thay đổi chính: `README.md`, `update_log.md`.
-- Kiểm tra: rà soát nội dung Markdown, chạy `git diff --check` và kiểm tra các thuật ngữ/quy tắc chủ xị xuất hiện nhất quán; không chạy test/build vì thay đổi chỉ là tài liệu.
-- Giới hạn/theo dõi: cần xác minh mô hình tài khoản người nhận của PayOS trước khi chọn làm QR/payment-link provider; cần migration mới và triển khai backend ở các giai đoạn tiếp theo. MVP chưa hỗ trợ trả thiếu, trả thừa, nhiều giao dịch cho một settlement hoặc gộp nhiều settlement vào một giao dịch.
-
 ## 2026-08-13 — Các màn hình chính và dock điều hướng từ Figma
 
 - Triển khai bốn màn hình mobile theo các frame Figma `Trang chủ` (`7:2`), `Nhóm (list)` (`25:678`), `Hoạt động` (`16:214`) và `Profile` (`16:2`) tại các route được bảo vệ `/dashboard`, `/groups`, `/activity` và `/profile`.

@@ -1,3 +1,5 @@
+// Route /activity — lazy-load ActivityScreen component.
+// Code-split màn hình Hoạt động, hiển thị skeleton loading khi chờ bundle.
 import dynamic from "next/dynamic";
 import RouteLoading from "@/components/app/RouteLoading";
 

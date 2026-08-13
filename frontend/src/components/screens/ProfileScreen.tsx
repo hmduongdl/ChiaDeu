@@ -1,3 +1,12 @@
+// Màn hình Cá nhân (/profile) — thông tin tài khoản và cài đặt.
+// Gồm các phần:
+//   - Header: tiêu đề "Trang Cá Nhân" + nút cài đặt
+//   - Avatar + tên + email người dùng (có huy hiệu "Đã xác minh")
+//   - Card tổng chi tiêu tháng: gradient xanh, hiển thị số tiền + % thay đổi
+//   - Menu TÀI KHOẢN: Thông tin cá nhân, Phương thức thanh toán, Bảo mật, Lịch sử giao dịch
+//   - Menu ỨNG DỤNG: Thông báo, Ngôn ngữ, Trợ giúp & Hỗ trợ
+//   - Nút Đăng xuất: gọi API logout, redirect về /login
+// Dữ liệu người dùng lấy từ useAuthStore, các mục menu là tĩnh.
 "use client";
 
 import { useRouter } from "next/navigation";
