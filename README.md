@@ -2,9 +2,31 @@
 
 *Tài liệu định hướng sản phẩm, yêu cầu nghiệp vụ và thiết kế hệ thống dự kiến*
 
-> Trạng thái hiện tại: dự án đã có phần xác thực tài khoản cơ bản. Các API nhóm, khoản chi,
-> thanh toán trong tài liệu này là **thiết kế mục tiêu**, chưa phải tính năng backend đã
-> hoàn thiện.
+> **Trạng thái hiện tại:** dự án đã có phần xác thực tài khoản cơ bản. Các API nhóm, khoản
+> chi, thanh toán mô tả trong tài liệu này là **thiết kế mục tiêu**, chưa phải tính năng
+> backend đã hoàn thiện. Xem mục [16](#16-xác-thực-và-chạy-dự-án-hiện-tại) để biết phần đã
+> chạy được thật sự.
+
+---
+
+## Mục lục
+
+1. [Tầm nhìn sản phẩm](#1-tầm-nhìn-sản-phẩm)
+2. [Thuật ngữ](#2-thuật-ngữ)
+3. [Nguyên tắc nghiệp vụ bắt buộc](#3-nguyên-tắc-nghiệp-vụ-bắt-buộc)
+4. [Vai trò và quyền hạn](#4-vai-trò-và-quyền-hạn)
+5. [Luồng sử dụng chính](#5-luồng-sử-dụng-chính)
+6. [Trạng thái nghiệp vụ](#6-trạng-thái-nghiệp-vụ)
+7. [Quy tắc đổi chủ xị](#7-quy-tắc-đổi-chủ-xị-chỉ-áp-dụng-cho-chế-độ-chủ-xị)
+8. [Kiến trúc dự kiến](#8-kiến-trúc-dự-kiến)
+9. [Mô hình dữ liệu đề xuất](#9-mô-hình-dữ-liệu-đề-xuất)
+10. [API mục tiêu](#10-api-mục-tiêu)
+11. [Bảo mật và độ tin cậy](#11-yêu-cầu-bảo-mật-và-độ-tin-cậy)
+12. [Yêu cầu UX](#12-yêu-cầu-ux)
+13. [Các trường hợp biên](#13-các-trường-hợp-biên-cần-xử-lý)
+14. [Tiêu chí nghiệm thu MVP](#14-tiêu-chí-nghiệm-thu-mvp)
+15. [Lộ trình đề xuất](#15-lộ-trình-đề-xuất)
+16. [Xác thực và chạy dự án hiện tại](#16-xác-thực-và-chạy-dự-án-hiện-tại)
 
 ---
 
@@ -14,12 +36,12 @@ Chia Đều là ứng dụng chia tiền nhóm bạn bè sau mỗi lần đi ch�
 cần liên kết ngân hàng, không cần cổng thanh toán — mở app lên, nhập khoản chi, hệ thống
 tự tính ai nợ ai bao nhiêu.
 
-App hỗ trợ hai chế độ tính nợ linh hoạt:
+App hỗ trợ **hai chế độ tính nợ** linh hoạt, chọn khi tạo nhóm:
 
-- **Chế độ "chủ xị" (single-creditor):** một người đứng ra ứng tiền và thanh toán các khoản
-  chi chung của nhóm. Các thành viên chỉ cần xem phần mình phải chịu và hoàn tiền lại cho
-  chủ xị.
-- **Chế độ "ai nợ ai" (multi-creditor):** nhiều thành viên có thể thay nhau ứng tiền.
+- **Chế độ "chủ xị" (single-creditor)** — một người đứng ra ứng tiền và thanh toán các
+  khoản chi chung của nhóm. Các thành viên chỉ cần xem phần mình phải chịu và hoàn tiền
+  lại cho chủ xị.
+- **Chế độ "ai nợ ai" (multi-creditor)** — nhiều thành viên có thể thay nhau ứng tiền.
   Hệ thống dùng thuật toán min-cash-flow để tối giản số giao dịch thanh toán giữa các
   thành viên, giống cách Splitwise vận hành.
 
