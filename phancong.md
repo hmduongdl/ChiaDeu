@@ -89,7 +89,7 @@ backend/
 
 ## 3. Phân công
 
-### Nhật Thành — phụ trách: `User`, `Group`, `Expense`
+### Bạn 1: Nhật Thành — phụ trách: `User`, `Group`, `Expense`
 
 **File cần tạo:** `models/user.go`, `models/group.go`, `models/expense.go`
 
@@ -173,7 +173,7 @@ tự chia đều `amount` cho từng người trong `memberIDs`, trả về danh
 
 ---
 
-### Phúc Khang — phụ trách: `SettlementBatch`, `Settlement`
+### Bạn 2: Phúc Khang — phụ trách: `SettlementBatch`, `Settlement`
 
 **File cần tạo:** `models/settlement.go`
 
@@ -241,16 +241,3 @@ Trạng thái: ☐ Chưa làm · 🔄 Đang làm · ✅ Xong
 
 ---
 
-## 5. Cách kiểm tra khi họ báo "xong" (dành cho Lộc)
-
-Không cần biết sâu về code, chỉ cần yêu cầu họ làm 3 việc sau ngay trước mặt bạn (hoặc quay màn hình):
-
-1. **Chạy được, không lỗi:** gõ `go build ./...` trong thư mục `backend/` — nếu không hiện chữ đỏ báo lỗi là struct viết đúng cú pháp.
-2. **Viết 1 file test nhỏ tự chạy thử (`main.go` tạm hoặc file `_test.go`)** để tạo thử 1 object và in ra kết quả method, ví dụ:
-   ```go
-   g := models.Group{Name: "Nhóm ăn tối", LeaderID: "u1"}
-   fmt.Println(g.IsLeader("u1")) // phải in ra "true"
-   ```
-3. **Giải thích bằng lời** struct đó tương ứng với bảng nào trong schema, mỗi field nghĩa là gì — nếu họ giải thích trôi chảy nghĩa là hiểu chứ không phải chép mẫu.
-
-Sau khi cả 2 xong phần này, mình sẽ ra bài tiếp theo (kết nối với database thật) — vẫn đơn giản hóa từng bước một, không nhảy thẳng vào API/webhook.
