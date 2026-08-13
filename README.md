@@ -70,8 +70,6 @@ Frontend gửi login tới proxy same-origin `/api/auth/login` với `credential
 
 Route middleware chỉ kiểm tra sự hiện diện của access cookie để redirect sớm; protected layout luôn gọi `/api/auth/me` để backend xác minh chữ ký, thời hạn và user thật. Cấu hình production cần hai JWT secret độc lập dài ít nhất 32 ký tự, HTTPS (`COOKIE_SECURE=true`), một `FRONTEND_ORIGIN` cụ thể, và nên giữ browser API URL là `/api` để Next middleware và Go backend cùng nhận cookie. Xem `.env.example` cho toàn bộ biến môi trường.
 
-Refresh JWT hiện là stateless và không được rotate/revoke phía server; logout xóa cookie phía browser nhưng không vô hiệu hóa ngay một token đã bị sao chép. Trước khi cần quản lý session theo thiết bị hoặc thu hồi tức thời, bổ sung `jti` cùng session store/revocation list.
-
 ---
 
 ## 4. Database Schema (PostgreSQL)
@@ -341,6 +339,15 @@ MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số th
 - Nếu sau này muốn vận hành thật với MoMo, cần đăng ký tài khoản Business (M4B) qua doanh nghiệp.
 - SePay có gói miễn phí giới hạn số lượng giao dịch/tháng — đủ dùng cho quy mô demo nhóm nhỏ.
 
+### 7.5 Đề xuất workflow onboarding cho ChiaDeu
+1. User đăng ký tài khoản ChiaDeu (email/password) → xong bước auth cơ bản
+2. Modal/step "Liên kết ngân hàng" (có thể cho skip, làm sau trong Settings):
+   a. Chọn ngân hàng từ danh sách SePay hỗ trợ (dropdown)
+   b. Nhập số tài khoản + số điện thoại
+   c. Gọi SePay Bank Hub API → nhận yêu cầu OTP
+   d. User nhập OTP ngay trong ChiaDeu (không rời app)
+   e. SePay xác nhận liên kết → BE lưu bank_account_id + trạng thái "linked"
+3. Từ giờ, webhook SePay tự động đổ giao dịch vào bank_transactions
 ---
 
 ## 8. Deploy
