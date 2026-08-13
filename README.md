@@ -1,398 +1,503 @@
-# Chia Đều — Cash Flow Minimizer
+# Chia Đều — chia tiền theo mô hình Chủ xị
 
-*Kế hoạch dự án · Schema · Backend Go · Frontend Next.js PWA · Tích hợp SePay + PayOS + MoMo · Deploy Vercel*
+*Tài liệu định hướng sản phẩm, yêu cầu nghiệp vụ và thiết kế hệ thống dự kiến*
 
----
-
-## 1. Tổng quan dự án
-
-Ứng dụng chia tiền nhóm kiểu Splitwise, với điểm khác biệt: thay vì nhập tay từng khoản chi, người dùng liên kết tài khoản ngân hàng qua SePay để đồng bộ giao dịch tự động, sau đó chọn giao dịch cần chia và hệ thống tự tính toán số tiền tối thiểu cần thanh toán giữa các thành viên.
-
-### Bài toán
-
-Một nhóm bạn đi du lịch/ăn uống chung. Mỗi người trả tiền hộ vài lần cho cả nhóm. Cuối cùng, ai nợ ai bao nhiêu tiền để hoàn lại công bằng?
-
-Vấn đề thực tế: nếu tính thủ công, số giao dịch hoàn tiền sẽ rất nhiều và lộn xộn. Ví dụ:
-
-- A nợ B: 100k
-- B nợ C: 150k
-- C nợ A: 50k
-
-Nếu chuyển từng khoản riêng lẻ → 3 giao dịch. Nhưng thực ra có thể rút gọn xuống còn 1-2 giao dịch mà vẫn đúng số tiền mỗi người cần nhận/trả. Đây chính là bài toán **Cash Flow Minimization** — tối thiểu hóa số lượng giao dịch thanh toán.
-
-### Luồng sử dụng chính
-
-- Người dùng liên kết tài khoản ngân hàng qua SePay (webhook báo biến động số dư real-time).
-- Mỗi giao dịch ngân hàng phát sinh được lưu vào hệ thống qua webhook của SePay.
-- Người dùng mở app, chọn một giao dịch ngân hàng muốn chia cho nhóm bạn.
-- Chọn nhóm và các thành viên tham gia chia tiền — hệ thống tạo Expense liên kết với giao dịch gốc.
-- Thuật toán Minimize Cash Flow tính ra số giao dịch thanh toán tối thiểu cần thực hiện.
-- Mỗi giao dịch thanh toán được sinh QR code / payment link (qua PayOS hoặc MoMo).
-- Khi người nợ thanh toán, webhook xác nhận tự động cập nhật trạng thái Settlement.
+> Trạng thái hiện tại: dự án đã có phần xác thực tài khoản cơ bản. Các API nhóm, khoản chi,
+> thanh toán, SePay và PayOS trong tài liệu này là **thiết kế mục tiêu**, chưa phải tính năng
+> backend đã hoàn thiện.
 
 ---
 
-## 2. Lựa chọn công nghệ
+## 1. Tầm nhìn sản phẩm
 
-| Thành phần | Công nghệ | Lý do chọn |
-|---|---|---|
-| Frontend | Next.js (React + TypeScript) + Tailwind CSS, PWA | Một codebase dùng cho cả web và mobile, cài lên màn hình chính như app thật, deploy Vercel miễn phí |
-| Backend API | Go (Fiber) | Hiệu năng cao, single binary deploy, xử lý webhook tốt, toàn bộ hệ thống dùng chung một ngôn ngữ |
-| Core Algorithm | Go (`container/heap`) | Thuật toán Minimize Cash Flow cài đặt trực tiếp trong Go, dùng Max-Heap với Greedy, O(N log N), không cần cgo hay external dependency |
-| Database | PostgreSQL | Quan hệ dữ liệu rõ ràng giữa Users – Groups – Expenses – Settlements, hỗ trợ transaction an toàn |
-| Thanh toán | SePay + PayOS + MoMo (sandbox) | Đa cổng thanh toán — mỗi cổng đảm nhiệm một vai trò riêng |
+Chia Đều số hóa cách một nhóm bạn thường thanh toán trong đời thực:
 
----
+- Mỗi nhóm có đúng một **trưởng nhóm**, còn gọi là **chủ xị**.
+- Chủ xị là người ứng tiền và thanh toán các khoản chi chung của nhóm.
+- Các thành viên chỉ cần xem phần mình phải chịu và hoàn tiền lại cho chủ xị.
+- Chỉ tài khoản nhận tiền của chủ xị cần được cấu hình cho nhóm.
+- SePay là tính năng nâng cao để tự động phát hiện tiền vào và đối soát. Nhóm vẫn dùng
+  được hoàn toàn ở chế độ thủ công nếu không liên kết SePay.
 
-## 3. Kiến trúc hệ thống
+Mục tiêu của sản phẩm không còn là tạo các khoản chuyển tiền chéo kiểu “A trả B, B trả C”.
+Mọi luồng hoàn tiền đều đi theo một hướng:
 
-```
-┌──────────────────────────┐
-│  Next.js PWA (Vercel)     │  UI, chọn giao dịch, xem balance, quét QR
-└───────────┬────────────────┘
-            │ REST / JSON API
-┌───────────▼────────────────┐
-│      Go Backend (Fiber)     │  REST API, Auth, xử lý webhook
-│                             │  Minimize Cash Flow (container/heap)
-└──────┬───────────┬──────────┘
-       │           │
-┌──────▼───┐  ┌────▼─────────────────┐
-│ Postgres │  │  SePay / PayOS / MoMo │
-│   (DB)   │  │  Webhooks             │
-└──────────┘  └──────────────────────┘
+```text
+Thành viên A ─┐
+Thành viên B ─┼──> Chủ xị
+Thành viên C ─┘
 ```
 
-Điểm khác biệt so với thiết kế ban đầu: **toàn bộ backend là Go thuần**, không cần C++ shared library hay cgo bridge. Thuật toán Minimize Cash Flow được cài đặt trực tiếp trong Go package `algo/`, dùng `container/heap` của standard library. Cách này giúp codebase đồng nhất, build đơn giản (single binary), deploy dễ dàng.
+Mô hình này giảm số tài khoản ngân hàng cần tích hợp, dễ hiểu trên giao diện và phù hợp
+với cách nhóm ăn uống, du lịch hoặc ở chung thường vận hành.
 
-### Luồng authentication
+## 2. Thuật ngữ
 
-Frontend gửi login tới proxy same-origin `/api/auth/login` với `credentials: include`. Backend kiểm tra bcrypt rồi đặt access JWT 15 phút trong cookie HttpOnly/Secure/SameSite=Lax và refresh JWT 7 ngày trong cookie HttpOnly/Secure/SameSite=Strict chỉ dành cho `/api/auth/refresh`; token không được lưu trong Web Storage hoặc đọc bởi JavaScript. Khi API trả `401`, fetch client chỉ gọi refresh một lần cho các request đồng thời, nhận access cookie mới rồi retry request gốc. Nếu refresh thất bại, Zustand xóa user và chuyển về `/login`. Logout gọi `/api/auth/logout`, backend hết hạn cả hai cookie, sau đó frontend xóa auth state.
-
-Route middleware chỉ kiểm tra sự hiện diện của access cookie để redirect sớm; protected layout luôn gọi `/api/auth/me` để backend xác minh chữ ký, thời hạn và user thật. Cấu hình production cần hai JWT secret độc lập dài ít nhất 32 ký tự, HTTPS (`COOKIE_SECURE=true`), một `FRONTEND_ORIGIN` cụ thể, và nên giữ browser API URL là `/api` để Next middleware và Go backend cùng nhận cookie. Xem `.env.example` cho toàn bộ biến môi trường.
-
----
-
-## 4. Database Schema (PostgreSQL)
-
-### 4.1 `users` — thông tin người dùng
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| id | UUID (PK) | `gen_random_uuid()` |
-| name | VARCHAR(100) | Tên hiển thị |
-| phone | VARCHAR(20) | Unique, dùng để mời/tìm bạn |
-| email | VARCHAR(100) | Unique |
-| bank_account_no | VARCHAR(50) | Số tài khoản liên kết SePay |
-| bank_code | VARCHAR(20) | Mã ngân hàng (VD: MBBank, VCB...) |
-| sepay_account_id | VARCHAR(50) | ID tài khoản đã đăng ký trên SePay |
-| avatar_url | TEXT | |
-| created_at | TIMESTAMPTZ | DEFAULT now() |
-
-### 4.2 `groups` — nhóm chi tiêu
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| id | UUID (PK) | |
-| name | VARCHAR(100) | VD: "Đà Lạt trip" |
-| share_code | VARCHAR(10) | Unique, mã mời ngắn để join nhóm |
-| created_by | UUID (FK users) | |
-| currency | VARCHAR(10) | Mặc định VND |
-| created_at | TIMESTAMPTZ | |
-
-### 4.3 `group_members` — thành viên nhóm
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| group_id | UUID (FK groups) | PK kép với user_id |
-| user_id | UUID (FK users) | |
-| joined_at | TIMESTAMPTZ | |
-
-### 4.4 `bank_transactions` — giao dịch đồng bộ từ SePay
-
-Bảng này lưu toàn bộ giao dịch ngân hàng của người dùng, nhận qua webhook SePay. Đây là nguồn dữ liệu để người dùng chọn khi tạo Expense, thay vì nhập tay.
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| id | UUID (PK) | |
-| user_id | UUID (FK users) | Chủ tài khoản phát sinh giao dịch |
-| sepay_transaction_id | VARCHAR(50) | ID giao dịch từ SePay, unique |
-| amount | NUMERIC(14,2) | Số tiền giao dịch |
-| transaction_type | VARCHAR(10) | IN hoặc OUT |
-| description | TEXT | Nội dung chuyển khoản gốc |
-| bank_account_no | VARCHAR(50) | |
-| is_used | BOOLEAN | Đã được gán vào 1 expense hay chưa |
-| transaction_time | TIMESTAMPTZ | Thời điểm giao dịch thực tế |
-| received_at | TIMESTAMPTZ | Thời điểm webhook nhận được |
-
-### 4.5 `expenses` — khoản chi được chia trong nhóm
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| id | UUID (PK) | |
-| group_id | UUID (FK groups) | |
-| source_transaction_id | UUID (FK bank_transactions) | Giao dịch ngân hàng gốc được chọn, có thể NULL nếu nhập tay |
-| paid_by | UUID (FK users) | |
-| description | VARCHAR(255) | |
-| amount | NUMERIC(14,2) | |
-| split_type | VARCHAR(20) | EQUAL / PERCENT / CUSTOM |
-| created_at | TIMESTAMPTZ | |
-
-### 4.6 `expense_splits` — chi tiết chia tiền từng người
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| id | UUID (PK) | |
-| expense_id | UUID (FK expenses) | |
-| user_id | UUID (FK users) | |
-| share_amount | NUMERIC(14,2) | Số tiền người này phải chịu |
-
-### 4.7 `settlements` — giao dịch thanh toán tối ưu
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| id | UUID (PK) | |
-| group_id | UUID (FK groups) | |
-| from_user | UUID (FK users) | Người phải trả |
-| to_user | UUID (FK users) | Người được nhận |
-| amount | NUMERIC(14,2) | |
-| status | VARCHAR(20) | PENDING / PAID / CANCELLED |
-| payment_method | VARCHAR(20) | PAYOS_QR / MOMO / SEPAY_TRANSFER / CASH |
-| qr_code_data | TEXT | Payload QR hoặc payment link |
-| confirmed_transaction_id | UUID (FK bank_transactions) | Giao dịch xác nhận thanh toán, khớp qua webhook |
-| paid_at | TIMESTAMPTZ | |
-| created_at | TIMESTAMPTZ | |
-
-```sql
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20) UNIQUE,
-    email VARCHAR(100) UNIQUE,
-    bank_account_no VARCHAR(50),
-    bank_code VARCHAR(20),
-    sepay_account_id VARCHAR(50),
-    avatar_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE groups (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    share_code VARCHAR(10) UNIQUE NOT NULL,
-    created_by UUID REFERENCES users(id),
-    currency VARCHAR(10) DEFAULT 'VND',
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE group_members (
-    group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    joined_at TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (group_id, user_id)
-);
-
-CREATE TABLE bank_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    sepay_transaction_id VARCHAR(50) UNIQUE,
-    amount NUMERIC(14,2) NOT NULL,
-    transaction_type VARCHAR(10) CHECK (transaction_type IN ('IN','OUT')),
-    description TEXT,
-    bank_account_no VARCHAR(50),
-    is_used BOOLEAN DEFAULT false,
-    transaction_time TIMESTAMPTZ,
-    received_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE expenses (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
-    source_transaction_id UUID REFERENCES bank_transactions(id),
-    paid_by UUID REFERENCES users(id),
-    description VARCHAR(255),
-    amount NUMERIC(14,2) NOT NULL,
-    split_type VARCHAR(20) DEFAULT 'EQUAL',
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE expense_splits (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    expense_id UUID REFERENCES expenses(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id),
-    share_amount NUMERIC(14,2) NOT NULL
-);
-
-CREATE TABLE settlements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    group_id UUID REFERENCES groups(id),
-    from_user UUID REFERENCES users(id),
-    to_user UUID REFERENCES users(id),
-    amount NUMERIC(14,2) NOT NULL,
-    status VARCHAR(20) DEFAULT 'PENDING',
-    payment_method VARCHAR(20),
-    qr_code_data TEXT,
-    confirmed_transaction_id UUID REFERENCES bank_transactions(id),
-    paid_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX idx_expenses_group ON expenses(group_id);
-CREATE INDEX idx_settlements_group ON settlements(group_id);
-CREATE INDEX idx_groups_share_code ON groups(share_code);
-CREATE INDEX idx_bank_tx_user_unused ON bank_transactions(user_id, is_used);
-```
-
----
-
-## 5. API Endpoints
-
-| Method & Path | Chức năng |
+| Thuật ngữ | Ý nghĩa |
 |---|---|
-| `POST /api/auth/link-bank` | Liên kết tài khoản ngân hàng với SePay |
-| `POST /api/webhooks/sepay` | Nhận webhook giao dịch mới từ SePay |
-| `GET /api/transactions?unused=true` | Lấy danh sách giao dịch ngân hàng chưa được gán vào Expense |
-| `POST /api/groups` | Tạo nhóm mới, sinh share_code |
-| `POST /api/groups/join/:shareCode` | Tham gia nhóm qua mã mời |
-| `GET /api/groups/:id` | Thông tin nhóm và thành viên |
-| `POST /api/groups/:id/expenses` | Tạo Expense — kèm source_transaction_id nếu chọn từ giao dịch ngân hàng |
-| `GET /api/groups/:id/balances` | Tính net balance của từng thành viên |
-| `POST /api/groups/:id/settle` | Gọi thuật toán Minimize Cash Flow, trả về danh sách settlements |
-| `POST /api/settlements/:id/qr` | Sinh QR / payment link thanh toán (PayOS hoặc MoMo) |
-| `POST /api/webhooks/payos` | Webhook xác nhận thanh toán qua PayOS |
-| `POST /api/webhooks/momo` | Webhook xác nhận thanh toán qua MoMo (sandbox) |
-| `GET /api/settlements/:id/status` | Kiểm tra trạng thái thanh toán |
+| Nhóm (`Group`) | Không gian ghi nhận khoản chi và công nợ của một nhóm người |
+| Chủ xị (`Leader`) | Thành viên đang ứng tiền, quản lý nhóm và nhận tiền hoàn lại |
+| Thành viên (`Member`) | Người tham gia chia chi phí và trả phần nợ của mình cho chủ xị |
+| Khoản chi (`Expense`) | Một lần chủ xị đã thanh toán cho nhóm |
+| Phần chia (`Expense split`) | Số tiền một thành viên phải chịu trong một khoản chi |
+| Kỳ chốt (`Settlement batch`) | Ảnh chụp công nợ tại thời điểm chủ xị yêu cầu thanh toán |
+| Khoản hoàn (`Settlement`) | Khoản một thành viên phải trả cho chủ xị trong một kỳ chốt |
+| Mã thanh toán | Mã duy nhất, ví dụ `CD4F82A9`, dùng trong nội dung chuyển khoản |
+| Đối soát | Ghép giao dịch tiền vào với đúng khoản hoàn và cập nhật trạng thái |
 
----
+`created_by` và `leader_id` là hai khái niệm khác nhau. Người tạo nhóm được lưu để phục
+vụ lịch sử; chủ xị là vai trò hiện tại và có thể được chuyển cho thành viên khác.
 
-## 6. Thuật toán cốt lõi — Minimize Cash Flow
+## 3. Nguyên tắc nghiệp vụ bắt buộc
 
-Dùng Greedy kết hợp Max-Heap để tối thiểu hoá số lượng giao dịch thanh toán. Toàn bộ cài đặt bằng Go thuần (`container/heap`), không phụ thuộc ngoài.
+1. Mỗi nhóm luôn có đúng một chủ xị đang hoạt động.
+2. Chủ xị phải là một thành viên của chính nhóm đó.
+3. Mọi khoản chi mới của nhóm được xem là do chủ xị hiện tại thanh toán.
+4. Mọi khoản hoàn được tạo trong một kỳ chốt phải có người nhận là chủ xị của kỳ đó.
+5. Thành viên không phải liên kết SePay, không nhập API key và không cấu hình tài khoản
+   nhận tiền.
+6. Tài khoản nhận tiền và cấu hình SePay thuộc phạm vi nhóm, không phải cấu hình toàn cục
+   áp dụng cho mọi nhóm mà người dùng tham gia.
+7. Mỗi khoản hoàn có một mã thanh toán duy nhất, không tái sử dụng.
+8. Chỉ webhook có mã khớp chính xác mới được tự động đánh dấu `PAID`.
+9. Khớp theo số tiền và thời gian chỉ tạo **gợi ý đối soát**, không tự động xác nhận khi
+   thiếu mã hoặc còn nhiều ứng viên.
+10. Nhóm không liên kết SePay vẫn tạo khoản chi, chốt nợ, sinh thông tin chuyển khoản và
+    xác nhận thủ công bình thường.
+11. Tiền được lưu bằng đơn vị nhỏ nhất của tiền tệ. Với VND, backend dùng số nguyên đồng;
+    không dùng `float` cho tính toán tài chính.
+12. Dữ liệu lịch sử phải giữ nguyên người trả, người nhận và cấu hình thanh toán tại thời
+    điểm phát sinh, kể cả sau khi đổi chủ xị.
 
-### Các bước xử lý
+## 4. Vai trò và quyền hạn
 
-1. Tính net balance từng người: tổng đã trả hộ trừ tổng phải trả theo phần chia.
-2. Đưa các số dư dương (creditor) vào Max-Heap, số dư âm (debtor) vào Max-Heap theo trị tuyệt đối.
-3. Lặp lại: lấy creditor và debtor lớn nhất, cho khớp một khoản = `min(hai giá trị)`.
-4. Cập nhật lại số dư, loại người về 0 khỏi heap, tiếp tục đến khi hết.
-5. Độ phức tạp: **O(N log N)** nhờ dùng Heap thay vì tìm max tuyến tính mỗi vòng lặp.
+| Hành động | Chủ xị | Thành viên |
+|---|:---:|:---:|
+| Xem nhóm, thành viên, khoản chi và công nợ của mình | Có | Có |
+| Tạo/sửa/hủy khoản chi | Có | Không |
+| Chọn cách chia khoản chi | Có | Không |
+| Mở hoặc hủy kỳ chốt | Có | Không |
+| Cấu hình tài khoản nhận tiền của nhóm | Có | Không |
+| Liên kết/ngắt SePay cho nhóm | Có | Không |
+| Xem toàn bộ trạng thái hoàn tiền | Có | Chỉ khoản của mình |
+| Yêu cầu xác nhận đã chuyển thủ công | Không | Có |
+| Xác nhận/từ chối yêu cầu thủ công | Có | Không |
+| Chuyển vai trò chủ xị | Có | Không |
+| Rời nhóm | Chỉ sau khi chuyển vai trò | Khi không còn nghĩa vụ đang mở |
 
-### Code (Go)
+Mọi quyền đều phải được backend kiểm tra từ membership hiện tại. Frontend ẩn nút không
+được xem là biện pháp phân quyền.
 
-```go
-package algo
+## 5. Luồng sử dụng chính
 
-import "container/heap"
+### 5.1 Tạo nhóm và thiết lập chủ xị
 
-type Balance struct {
-    UserID string
-    Amount float64 // dương = được nhận, âm = đang nợ
-}
+1. Người dùng tạo nhóm và tự động trở thành chủ xị đầu tiên.
+2. Hệ thống sinh mã mời; người khác tham gia bằng mã hoặc liên kết mời.
+3. Chủ xị có thể cấu hình tài khoản nhận tiền của riêng nhóm gồm tên ngân hàng, số tài
+   khoản và tên chủ tài khoản.
+4. Chủ xị có thể bỏ qua bước liên kết SePay để dùng chế độ thủ công.
+5. Nếu liên kết SePay, backend lưu định danh tài khoản tích hợp cho nhóm và bắt đầu nhận
+   webhook tiền vào của tài khoản đó.
 
-type Settlement struct {
-    From   string
-    To     string
-    Amount float64
-}
+Một người có thể là chủ xị ở nhóm A nhưng chỉ là thành viên ở nhóm B. Một tài khoản ngân
+hàng có thể được dùng cho nhiều nhóm; mã thanh toán vẫn giúp route giao dịch về đúng
+`group_id` và `settlement_id`.
 
-func MinimizeCashFlow(balances []Balance) []Settlement {
-    // 1. Tách thành 2 Max-Heap: creditors (dương) và debtors (âm)
-    // 2. Lặp: lấy max creditor + max debtor
-    //    settleAmount = min(creditor, |debtor|)
-    //    tạo Settlement{debtor, creditor, settleAmount}
-    //    cập nhật lại heap, loại người có balance = 0
-    // 3. Trả về danh sách settlements tối thiểu
-}
+### 5.2 Ghi nhận khoản chi
+
+1. Chủ xị nhập mô tả, tổng tiền, ngày chi và người tham gia.
+2. Chọn cách chia: đều, phần trăm, theo trọng số hoặc số tiền tùy chỉnh.
+3. Backend kiểm tra tổng các phần chia phải bằng tổng khoản chi.
+4. Phần của chính chủ xị được ghi nhận là chi phí cá nhân, không tạo khoản hoàn.
+5. Phần của mỗi thành viên làm tăng số tiền người đó nợ chủ xị.
+
+Nguồn khoản chi có thể là nhập tay hoặc một giao dịch tiền ra đã đồng bộ. Việc đồng bộ
+giao dịch tiền ra là tiện ích cho chủ xị, không phải điều kiện để tạo khoản chi.
+
+### 5.3 Chốt công nợ
+
+Chủ xị mở một kỳ chốt. Hệ thống lấy các phần chia chưa thuộc kỳ chốt trước đó và cộng nợ
+theo từng thành viên:
+
+```text
+Số tiền thành viên phải trả = Tổng phần chia của thành viên - Các điều chỉnh hợp lệ
 ```
 
-Vị trí trong codebase: `backend/algo/minimize_cash_flow.go`. Package `algo` được import trực tiếp từ các handler trong `internal/handlers/`, không cần cgo bridge.
+Vì mọi khoản chi đều do chủ xị trả, không cần thuật toán Cash Flow Minimization giữa nhiều
+chủ nợ. Hệ thống chỉ tạo tối đa một settlement cho mỗi thành viên có số nợ lớn hơn 0.
 
----
+Ví dụ, An nợ 120.000đ và Bình nợ 80.000đ thì kỳ chốt tạo:
 
-## 7. Tích hợp thanh toán đa cổng (SePay + PayOS + MoMo)
+- An → Chủ xị: 120.000đ, mã `CD4F82A9`.
+- Bình → Chủ xị: 80.000đ, mã `CD91B7C2`.
 
-MoMo Business API (M4B) yêu cầu tài khoản doanh nghiệp với mã số thuế, không phù hợp để đăng ký trực tiếp cho dự án cá nhân/sinh viên. Vì vậy hệ thống tách vai trò rõ ràng giữa 3 cổng.
+Kỳ chốt là ảnh chụp bất biến. Khoản chi tạo sau thời điểm chốt sẽ thuộc kỳ kế tiếp; không
+âm thầm thay đổi số tiền mà thành viên đang chuẩn bị thanh toán.
 
-### 7.1 Vai trò từng cổng
+### 5.4 Thành viên hoàn tiền
 
-| Cổng | Vai trò trong hệ thống | Lý do |
+Tại màn hình khoản cần trả, thành viên thấy:
+
+- Số tiền chính xác.
+- Tên chủ xị và tài khoản nhận tiền.
+- Mã thanh toán bắt buộc.
+- QR có sẵn số tài khoản, số tiền và nội dung chuyển khoản nếu cấu hình hỗ trợ.
+- Trạng thái cập nhật gần thời gian thực.
+- Nút “Tôi đã chuyển khoản” cho chế độ thủ công hoặc khi tự động đối soát chưa nhận ra.
+
+QR chỉ là phương tiện điền thông tin chuyển khoản. Cần xác minh riêng khả năng của từng
+nhà cung cấp trước khi khẳng định PayOS có thể chuyển tiền trực tiếp về tài khoản động của
+từng chủ xị. MVP có thể dùng VietQR theo tài khoản nhóm và SePay để đối soát tiền vào;
+PayOS chỉ bật khi mô hình tài khoản người nhận và hợp đồng tích hợp đã được xác nhận.
+
+### 5.5 Đối soát tự động qua SePay
+
+Khi nhận webhook tiền vào, backend xử lý theo thứ tự:
+
+1. Xác minh webhook theo cơ chế được nhà cung cấp hỗ trợ và từ chối payload không hợp lệ.
+2. Dùng mã giao dịch bên cung cấp làm idempotency key để không ghi nhận hai lần.
+3. Xác định cấu hình nhận tiền/nhóm từ tài khoản đã nhận giao dịch.
+4. Chuẩn hóa nội dung và tìm mã thanh toán theo định dạng cho phép.
+5. Yêu cầu mã thuộc một settlement `PENDING`, đúng nhóm và số tiền khớp tuyệt đối.
+6. Lưu giao dịch ngân hàng, liên kết settlement rồi chuyển settlement sang `PAID` trong
+   cùng một database transaction.
+7. Ghi nguồn xác nhận là `SEPAY_AUTO` và thời điểm thanh toán.
+
+Nếu không có mã, sai số tiền, trùng ứng viên hoặc settlement đã đóng, giao dịch đi vào
+hàng đợi `UNMATCHED`/`REVIEW_REQUIRED`. Hệ thống có thể xếp hạng gợi ý dựa trên số tiền,
+thời gian và tên người gửi, nhưng chỉ chủ xị được quyết định ghép thủ công.
+
+### 5.6 Xác nhận thủ công
+
+1. Thành viên nhấn “Tôi đã chuyển khoản”, có thể đính kèm ghi chú hoặc ảnh biên lai.
+2. Settlement chuyển từ `PENDING` sang `AWAITING_CONFIRMATION`; trạng thái này chưa được
+   tính là đã thanh toán.
+3. Chủ xị kiểm tra tài khoản và chọn xác nhận hoặc từ chối.
+4. Xác nhận chuyển thành `PAID` với nguồn `LEADER_MANUAL`; từ chối đưa về `PENDING` và
+   lưu lý do.
+
+Thành viên không được tự đánh dấu `PAID`, vì đây là trạng thái xác nhận tiền đã đến người
+nhận chứ không chỉ là tuyên bố đã gửi.
+
+## 6. Trạng thái nghiệp vụ
+
+### 6.1 Settlement
+
+```text
+PENDING ──thành viên báo đã trả──> AWAITING_CONFIRMATION
+   │                                      │
+   │ webhook khớp chính xác               ├──chủ xị từ chối──> PENDING
+   │                                      │
+   ├──────────────────────────────────────┴──xác nhận──> PAID
+   │
+   └──chủ xị hủy kỳ chốt──────────────────────────────> CANCELLED
+```
+
+`PAID` và `CANCELLED` là trạng thái kết thúc. Sửa một settlement đã kết thúc phải thông
+qua nghiệp vụ điều chỉnh có audit log, không cập nhật trực tiếp làm mất lịch sử.
+
+### 6.2 Cấu hình thanh toán của nhóm
+
+| Trạng thái | Ý nghĩa |
+|---|---|
+| `MANUAL` | Có thể hiện thông tin chuyển khoản nhưng không tự động đối soát |
+| `CONNECTING` | Đang thực hiện luồng liên kết nhà cung cấp |
+| `ACTIVE` | Webhook đang hoạt động và có thể tự đối soát |
+| `ERROR` | Liên kết lỗi, hết quyền hoặc webhook cần kiểm tra |
+| `DISCONNECTED` | Đã ngắt; nhóm quay về xác nhận thủ công |
+
+## 7. Quy tắc đổi chủ xị
+
+Đổi chủ xị là thay đổi người ứng tiền và người nhận của **các hoạt động tương lai**, không
+được làm thay đổi lịch sử.
+
+Để tránh thành viên quét QR cũ nhưng tiền đi vào tài khoản mới, bản MVP áp dụng quy tắc:
+
+1. Người nhận vai trò mới phải đang là thành viên nhóm.
+2. Không cho đổi khi còn kỳ chốt có settlement `PENDING` hoặc
+   `AWAITING_CONFIRMATION`.
+3. Chủ xị cũ phải hoàn tất hoặc hủy kỳ đang mở trước khi chuyển vai trò.
+4. Sau khi chuyển, cấu hình SePay cũ bị ngắt khỏi hoạt động mới.
+5. Chủ xị mới cấu hình tài khoản nhận tiền hoặc chọn chế độ thủ công.
+6. Expense, batch, settlement và bank transaction cũ giữ snapshot người nhận cũ.
+7. Mọi lần chuyển vai trò phải ghi audit log gồm người thao tác, người cũ, người mới và
+   thời gian.
+
+Giai đoạn sau có thể hỗ trợ nhiều “kỳ chủ xị” đồng thời, nhưng đổi lại UI và webhook
+routing phức tạp hơn. MVP ưu tiên quy tắc đóng kỳ trước khi chuyển.
+
+## 8. Kiến trúc dự kiến
+
+```text
+┌─────────────────────────────┐
+│ Next.js PWA                 │
+│ Nhóm, khoản chi, QR, trạng  │
+│ thái hoàn tiền              │
+└──────────────┬──────────────┘
+               │ REST/JSON + HttpOnly cookie
+┌──────────────▼──────────────┐
+│ Go/Fiber API                │
+│ Auth, phân quyền, tính nợ,  │
+│ webhook và đối soát         │
+└───────┬─────────────┬───────┘
+        │             │
+┌───────▼───────┐ ┌───▼─────────────────┐
+│ PostgreSQL    │ │ SePay / QR provider │
+│ Dữ liệu + log │ │ Webhook tiền vào    │
+└───────────────┘ └─────────────────────┘
+```
+
+### Công nghệ
+
+| Thành phần | Công nghệ dự kiến | Trách nhiệm |
 |---|---|---|
-| **SePay** | Đồng bộ lịch sử giao dịch ngân hàng (luồng chọn giao dịch để tạo Expense) | Đăng ký cá nhân dễ dàng, webhook realtime, đúng thế mạnh theo dõi biến động số dư |
-| **PayOS** | Sinh QR / payment link cho từng Settlement khi cần thanh toán chéo giữa các thành viên | Không yêu cầu người nhận có tài khoản SePay riêng, chỉ cần số tài khoản ngân hàng để tạo QR, có sandbox test miễn phí |
-| **MoMo (Sandbox)** | Lựa chọn thanh toán phụ, hiển thị trong UI như một phương thức thay thế | Tích hợp được ở môi trường Test mà không cần tài khoản Business, đủ để demo đa dạng phương thức thanh toán |
+| Frontend | Next.js, React, TypeScript, Tailwind CSS | PWA và trải nghiệm theo vai trò |
+| Backend | Go, Fiber | API, kiểm tra quyền và xử lý webhook |
+| Database | PostgreSQL | Giao dịch dữ liệu, ràng buộc và audit |
+| Auth | JWT ngắn hạn + refresh cookie HttpOnly | Xác thực phiên hiện có |
+| Đối soát | SePay | Nhận biến động tiền vào của chủ xị |
+| QR/payment link | VietQR hoặc PayOS sau khi xác minh mô hình tích hợp | Điền sẵn thông tin hoàn tiền |
 
-### 7.2 Luồng đồng bộ giao dịch (SePay)
+## 9. Mô hình dữ liệu đề xuất
 
-- Người dùng liên kết tài khoản ngân hàng ngay trong bước onboarding — nhập số tài khoản và ngân hàng, hệ thống gọi API SePay để đăng ký theo dõi.
-- SePay gửi webhook mỗi khi có biến động số dư — hệ thống lưu vào bảng `bank_transactions` với `is_used = false`.
-- Trong giao diện tạo Expense, người dùng thấy danh sách giao dịch `is_used = false`, chọn một giao dịch để gán làm khoản chi cần chia.
+Đây là schema mục tiêu cho migration tương lai. Migration hiện tại vẫn phản ánh mô hình cũ
+và **chưa được xem là đã đáp ứng tài liệu này**.
 
-### 7.3 Luồng thanh toán Settlement (PayOS chính, MoMo phụ)
+### 9.1 `users`
 
-- Khi Settlement được tạo, hệ thống gọi PayOS để sinh QR code/payment link tương ứng với số tiền cần trả.
-- Người dùng có thể chọn thanh toán qua MoMo sandbox nếu muốn demo phương thức thay thế — sinh QR/deeplink MoMo tương ứng.
-- Webhook PayOS (và MoMo ở môi trường test) báo về khi thanh toán thành công — hệ thống cập nhật Settlement sang trạng thái PAID.
-- Song song đó, nếu giao dịch chuyển khoản thật đi qua ngân hàng đã liên kết SePay, webhook SePay cũng có thể đối chiếu số tiền + nội dung để xác nhận chéo, tăng độ tin cậy.
+Chỉ lưu hồ sơ và thông tin xác thực người dùng. Không đặt `sepay_account_id` hoặc tài khoản
+nhận tiền mặc định ở đây làm nguồn sự thật cho settlement.
 
-### 7.4 Ghi chú triển khai thực tế
+| Cột chính | Ý nghĩa |
+|---|---|
+| `id`, `name`, `email`, `password_hash` | Danh tính và đăng nhập |
+| `phone`, `avatar_url` | Hồ sơ tùy chọn |
+| `created_at`, `updated_at` | Thời gian quản lý bản ghi |
 
-- Giai đoạn demo/đồ án: dùng PayOS thật (có sandbox miễn phí) + MoMo sandbox — không cần giấy phép kinh doanh.
-- Nếu sau này muốn vận hành thật với MoMo, cần đăng ký tài khoản Business (M4B) qua doanh nghiệp.
-- SePay có gói miễn phí giới hạn số lượng giao dịch/tháng — đủ dùng cho quy mô demo nhóm nhỏ.
+### 9.2 `groups` và `group_members`
 
-### 7.5 Đề xuất workflow onboarding cho ChiaDeu
-1. User đăng ký tài khoản ChiaDeu (email/password) → xong bước auth cơ bản
-2. Modal/step "Liên kết ngân hàng" (có thể cho skip, làm sau trong Settings):
-   a. Chọn ngân hàng từ danh sách SePay hỗ trợ (dropdown)
-   b. Nhập số tài khoản + số điện thoại
-   c. Gọi SePay Bank Hub API → nhận yêu cầu OTP
-   d. User nhập OTP ngay trong ChiaDeu (không rời app)
-   e. SePay xác nhận liên kết → BE lưu bank_account_id + trạng thái "linked"
-3. Từ giờ, webhook SePay tự động đổ giao dịch vào bank_transactions
----
+| Bảng/cột chính | Ý nghĩa |
+|---|---|
+| `groups.created_by` | Người tạo, không thay đổi theo vai trò |
+| `groups.leader_id` | Chủ xị hiện tại, phải thuộc nhóm |
+| `groups.share_code`, `currency` | Mời thành viên và đơn vị tiền |
+| `group_members(group_id, user_id)` | Thành viên và thời điểm tham gia |
 
-## 8. Deploy
+Ràng buộc “leader phải là member” nên được bảo vệ bằng transaction/service rule; nếu dùng
+ràng buộc database thì phải thiết kế khóa phù hợp để tránh trạng thái trung gian khi tạo nhóm.
 
-### Vercel Services — Frontend + Backend
+### 9.3 `group_payment_profiles`
 
-File `vercel.json` ở thư mục gốc khai báo hai service và dùng chung một domain:
+Một cấu hình nhận tiền hoạt động cho mỗi nhóm. Dữ liệu bí mật của nhà cung cấp phải mã hóa
+ở tầng ứng dụng hoặc lưu trong secret manager, không trả về frontend.
 
-- Next.js frontend phục vụ tất cả các URL thông thường.
-- Go backend phục vụ dưới prefix `/api/backend`.
-- Ví dụ health check production: `GET /api/backend/health`.
+| Cột chính | Ý nghĩa |
+|---|---|
+| `group_id` | Phạm vi cấu hình, unique khi đang hoạt động |
+| `receiver_user_id` | Chủ xị sở hữu cấu hình tại thời điểm kích hoạt |
+| `bank_code`, `bank_account_no`, `account_name` | Thông tin sinh QR/hiển thị |
+| `provider`, `provider_account_id` | Nhà cung cấp và ID tích hợp, nullable ở manual mode |
+| `status`, `connected_at`, `disconnected_at` | Vòng đời liên kết |
 
-Các bước deploy:
+### 9.4 `expenses` và `expense_splits`
 
-1. Push toàn bộ repository lên GitHub và import repository vào Vercel.
-2. Trong **Build and Deployment Settings**, chọn Framework Preset là **Services** và giữ Root Directory ở thư mục gốc repository.
-3. Khai báo các biến môi trường backend cần dùng, ví dụ `DATABASE_URL`, trong Vercel Dashboard.
-4. Deploy. Vercel sẽ build `frontend` và `backend` thành hai service trong cùng deployment.
+| Bảng/cột chính | Ý nghĩa |
+|---|---|
+| `expenses.group_id` | Nhóm sở hữu khoản chi |
+| `expenses.paid_by` | Snapshot chủ xị đã trả khoản này |
+| `expenses.amount_minor` | Tổng tiền bằng số nguyên đơn vị nhỏ nhất |
+| `expenses.split_type`, `description`, `expense_date` | Quy tắc chia và nội dung |
+| `expense_splits.user_id`, `share_minor` | Phần mỗi người phải chịu |
+| `expense_splits.settlement_batch_id` | Nullable cho đến khi được chốt |
 
-Có thể chạy cấu hình Vercel Services trên máy bằng `vercel dev`. Khi chỉ chạy Next.js bằng `npm run dev`, rewrite trong `frontend/next.config.js` sẽ chuyển `/api/backend/*` đến backend ở `http://localhost:8080`.
+### 9.5 `settlement_batches` và `settlements`
 
-### Local Development
+| Bảng/cột chính | Ý nghĩa |
+|---|---|
+| `settlement_batches.leader_id` | Snapshot chủ xị của kỳ chốt |
+| `settlement_batches.status` | `OPEN`, `COMPLETED`, `CANCELLED` |
+| `settlements.from_user_id` | Thành viên trả tiền |
+| `settlements.to_user_id` | Chủ xị nhận tiền, snapshot bất biến |
+| `settlements.amount_minor` | Số tiền phải trả |
+| `settlements.payment_code` | Mã duy nhất, không đoán được và dễ nhập |
+| `settlements.status` | Trạng thái theo mục 6 |
+| `settlements.confirmation_source` | `SEPAY_AUTO`, `LEADER_MANUAL` hoặc null |
+| `settlements.paid_at` | Thời điểm xác nhận tiền đến |
+
+Nên có unique key `(batch_id, from_user_id)` để một thành viên chỉ có một settlement trong
+mỗi kỳ và unique index không phân biệt hoa/thường cho `payment_code`.
+
+### 9.6 `bank_transactions`, `reconciliation_candidates` và `audit_logs`
+
+| Bảng | Mục đích |
+|---|---|
+| `bank_transactions` | Lưu webhook đã chuẩn hóa, raw payload được bảo vệ, provider transaction ID unique |
+| `reconciliation_candidates` | Gợi ý ghép không chắc chắn, điểm tin cậy và quyết định của chủ xị |
+| `audit_logs` | Lịch sử đổi vai trò, sửa chi phí, xác nhận/từ chối và ghép giao dịch |
+
+`bank_transactions` cần giữ `group_id`, payment profile và receiver snapshot để dữ liệu cũ
+không bị route lại khi nhóm đổi chủ xị.
+
+## 10. API mục tiêu
+
+Các endpoint dưới đây là hợp đồng dự kiến, chưa khẳng định đã tồn tại trong backend.
+
+### Nhóm và vai trò
+
+| Method & path | Chức năng |
+|---|---|
+| `POST /api/groups` | Tạo nhóm; người tạo là chủ xị đầu tiên |
+| `POST /api/groups/join/:shareCode` | Tham gia nhóm |
+| `GET /api/groups/:id` | Lấy nhóm, vai trò, thành viên và trạng thái payment profile |
+| `POST /api/groups/:id/transfer-leadership` | Chuyển chủ xị khi không còn settlement mở |
+
+### Cấu hình nhận tiền
+
+| Method & path | Chức năng |
+|---|---|
+| `PUT /api/groups/:id/payment-profile` | Cập nhật thông tin nhận tiền/manual mode |
+| `POST /api/groups/:id/sepay/connect` | Bắt đầu liên kết SePay cho chủ xị hiện tại |
+| `DELETE /api/groups/:id/sepay/connect` | Ngắt liên kết và chuyển về manual mode |
+
+### Khoản chi và kỳ chốt
+
+| Method & path | Chức năng |
+|---|---|
+| `POST /api/groups/:id/expenses` | Chủ xị tạo khoản chi và phần chia |
+| `PATCH /api/groups/:id/expenses/:expenseId` | Sửa khoản chưa chốt |
+| `GET /api/groups/:id/balances` | Xem nợ chưa chốt theo thành viên |
+| `POST /api/groups/:id/settlement-batches` | Chốt nợ và tạo settlement hình sao |
+| `GET /api/groups/:id/settlement-batches/:batchId` | Xem tiến độ thu tiền của kỳ |
+
+### Thanh toán và đối soát
+
+| Method & path | Chức năng |
+|---|---|
+| `GET /api/settlements/:id/payment-instructions` | Trả QR/payload và thông tin người nhận |
+| `POST /api/settlements/:id/mark-sent` | Thành viên yêu cầu xác nhận thủ công |
+| `POST /api/settlements/:id/confirm` | Chủ xị xác nhận đã nhận tiền |
+| `POST /api/settlements/:id/reject` | Chủ xị từ chối yêu cầu thủ công |
+| `POST /api/webhooks/sepay` | Nhận webhook công khai, có xác minh và idempotency |
+| `GET /api/groups/:id/reconciliation` | Chủ xị xem giao dịch chưa khớp và gợi ý |
+| `POST /api/groups/:id/reconciliation/:transactionId/match` | Chủ xị ghép thủ công với settlement |
+
+Các lệnh tạo/chốt/xác nhận nên nhận idempotency key từ client để tránh nhân đôi khi mạng
+chập chờn hoặc người dùng bấm lại.
+
+## 11. Yêu cầu bảo mật và độ tin cậy
+
+- Không lưu API key, access token nhà cung cấp hoặc raw webhook nhạy cảm dưới dạng plain
+  text trong log.
+- Webhook không dùng phiên đăng nhập người dùng nhưng phải có xác minh nhà cung cấp,
+  chống replay nếu giao thức hỗ trợ và giới hạn kích thước payload.
+- Mọi webhook phải idempotent theo provider transaction ID.
+- Cập nhật bank transaction và settlement phải nằm trong cùng database transaction.
+- API trả dữ liệu theo nguyên tắc tối thiểu: thành viên không xem cấu hình bí mật hoặc giao
+  dịch ngân hàng không liên quan.
+- QR và payment instruction phải được tạo từ snapshot của settlement, không đọc mù quáng
+  cấu hình chủ xị mới nhất.
+- Mã thanh toán cần đủ entropy, không chứa thông tin cá nhân và được parse không phân biệt
+  hoa/thường nhưng không match theo chuỗi con quá rộng.
+- Mọi hành động tài chính quan trọng phải có audit log.
+- Tiền dùng integer/decimal chính xác; validate currency và không cho số âm hoặc bằng 0.
+
+## 12. Yêu cầu UX
+
+### Dashboard chủ xị
+
+- Tổng đã ứng, tổng chưa thu, tổng đã thu và giao dịch cần xem xét.
+- Trạng thái liên kết ngân hàng rõ ràng; lỗi SePay không chặn thao tác thủ công.
+- Danh sách ai chưa trả, ai báo đã chuyển và ai đã được xác nhận.
+- Cảnh báo và hướng dẫn đóng kỳ trước khi đổi chủ xị.
+
+### Dashboard thành viên
+
+- Ưu tiên con số “Bạn cần trả chủ xị” thay vì bảng balance phức tạp.
+- Hiển thị rõ người nhận, số tiền, mã thanh toán và một nút quét/sao chép.
+- Phân biệt “Đã báo chuyển” với “Chủ xị đã nhận”; không dùng cùng màu/trạng thái.
+- Không xuất hiện màn hình liên kết SePay cho thành viên thường.
+
+### Trạng thái rỗng và lỗi
+
+- Chưa có khoản chi: hướng dẫn chủ xị thêm khoản đầu tiên.
+- Chưa liên kết SePay: giải thích nhóm vẫn hoạt động ở chế độ thủ công.
+- Webhook chậm: cho phép báo đã chuyển và hiển thị “đang chờ đối soát”.
+- Sai nội dung chuyển khoản: hướng dẫn liên hệ chủ xị để ghép thủ công, không yêu cầu trả
+  lần hai ngay lập tức.
+
+## 13. Các trường hợp biên cần xử lý
+
+- Thành viên rời nhóm khi còn nợ hoặc còn settlement mở.
+- Chủ xị tự đưa mình ra khỏi phần chia của một expense.
+- Tổng CUSTOM/PERCENT không bằng tổng expense do làm tròn.
+- Thành viên trả thiếu, trả thừa hoặc chia thành nhiều lần chuyển.
+- Hai settlement cùng số tiền được chuyển gần nhau nhưng không có mã.
+- Một giao dịch chứa nhiều chuỗi giống mã thanh toán.
+- Webhook bị gửi lặp, đến sai thứ tự hoặc đến sau khi đã xác nhận thủ công.
+- Chủ xị nhận tiền thủ công rồi sau đó webhook của cùng giao dịch xuất hiện.
+- Khoản chi bị sửa sau khi đã chốt.
+- Kỳ chốt bị hủy khi một số settlement đã `PAID`.
+- Tài khoản ngân hàng của chủ xị thay đổi trong khi còn QR chưa thanh toán.
+- Một payment profile được dùng bởi nhiều nhóm.
+
+Với MVP, không hỗ trợ trả một settlement bằng nhiều giao dịch hoặc gộp nhiều settlement
+vào một giao dịch. Các trường hợp trả thiếu/thừa đi vào hàng đợi để chủ xị xử lý thủ công;
+không tự động suy diễn.
+
+## 14. Tiêu chí nghiệm thu MVP
+
+- Tạo nhóm tự gán người tạo làm chủ xị và thành viên đầu tiên trong một transaction.
+- Thành viên không thể gọi API tạo expense, cấu hình ngân hàng hoặc xác nhận nhận tiền.
+- Chủ xị tạo expense với các kiểu chia và backend từ chối tổng phần chia sai.
+- Chốt nợ tạo đúng một settlement cho mỗi thành viên còn nợ, tất cả cùng trả về chủ xị.
+- Mỗi settlement có mã duy nhất và payment instruction đúng snapshot người nhận.
+- Webhook lặp không tạo bank transaction hoặc ghi nhận thanh toán lần hai.
+- Webhook mã đúng + tiền đúng tự động chuyển `PENDING` thành `PAID`.
+- Webhook thiếu mã/sai tiền không tự động `PAID` và xuất hiện trong hàng đợi xem xét.
+- Manual mode hoạt động khi chưa có SePay.
+- Không đổi được chủ xị khi còn settlement mở; lịch sử không đổi sau khi chuyển vai trò.
+- Tất cả hành động tài chính và đổi vai trò có audit log.
+
+## 15. Lộ trình đề xuất
+
+| Giai đoạn | Nội dung |
+|---|---|
+| 1. Nền tảng nhóm | Migration mới, group membership, leader RBAC và audit log |
+| 2. Chi phí | Expense/split, kiểm tra tổng tiền, balance chưa chốt |
+| 3. Chốt nợ thủ công | Settlement batch, payment code, QR và xác nhận hai bước |
+| 4. Đối soát | Payment profile theo nhóm, SePay webhook, exact match và review queue |
+| 5. Chuyển chủ xị | Quy tắc đóng kỳ, ngắt/kích hoạt payment profile và lịch sử bất biến |
+| 6. Hoàn thiện | Thông báo, rate limit, quan sát hệ thống, test tích hợp và PWA polish |
+
+Nên hoàn thành luồng thủ công trước SePay. Khi đó sản phẩm đã sử dụng được và webhook chỉ
+là lớp tự động hóa, không trở thành điểm lỗi duy nhất của nghiệp vụ.
+
+## 16. Xác thực và chạy dự án hiện tại
+
+Frontend gửi login tới proxy same-origin `/api/auth/login` với `credentials: include`.
+Backend dùng access/refresh JWT trong cookie HttpOnly; token không được lưu trong Web
+Storage. Protected layout gọi `/api/auth/me` để xác minh user thực tế.
+
+Cấu hình production cần hai JWT secret độc lập dài ít nhất 32 ký tự, HTTPS
+(`COOKIE_SECURE=true`), một `FRONTEND_ORIGIN` cụ thể và browser API URL `/api`. Xem
+`.env.example` cho các biến môi trường hiện có.
+
+### Local development
 
 ```bash
 # Khởi động PostgreSQL
 docker-compose up -d postgres
 
-# Backend
+# Chạy backend
 cd backend && go run .
 
-# Frontend
+# Chạy frontend
 cd frontend && npm install && npm run dev
 ```
 
----
+### Deploy hiện tại
 
-## 9. Roadmap thực hiện
-
-| Giai đoạn | Nội dung |
-|---|---|
-| Tuần 1 | Setup database schema, khởi tạo Go backend (CRUD groups, users, expenses cơ bản) |
-| Tuần 2 | Viết thuật toán Minimize Cash Flow bằng Go (`container/heap`), tích hợp vào handler |
-| Tuần 3 | Tích hợp webhook SePay, xử lý và lưu bank_transactions |
-| Tuần 4 | Frontend Next.js: tạo nhóm, chọn giao dịch ngân hàng để tạo expense, xem balance |
-| Tuần 5 | Sinh QR thanh toán cho settlement (PayOS + MoMo), xác nhận tự động qua webhook |
-| Tuần 6 | PWA polish, testing, viết báo cáo DSA (chứng minh độ phức tạp thuật toán) |
-
----
+`vercel.json` ở thư mục gốc khai báo Next.js frontend và Go backend. API backend triển
+khai dưới prefix `/api/backend`; health check là `GET /api/backend/health`. Các API nghiệp
+vụ chủ xị trong mục 10 chỉ là hợp đồng mục tiêu cho các giai đoạn tiếp theo.
