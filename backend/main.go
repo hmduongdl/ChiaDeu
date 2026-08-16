@@ -52,7 +52,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure JWT: %v", err)
 	}
-	authService := auth.NewService(auth.NewPostgresUserStore(pool))
+	sessionStore := auth.NewPostgresSessionStore(pool)
+	authService := auth.NewServiceWithSessions(auth.NewPostgresUserStore(pool), tokens, sessionStore)
 	authHandler := handlers.NewAuthHandler(authService, tokens, handlers.CookieConfig{
 		Secure: appConfig.CookieSecure,
 		Domain: appConfig.CookieDomain,
