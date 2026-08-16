@@ -80,10 +80,11 @@ func (s *Service) CreateGroup(ctx context.Context, actorID, name, currency strin
 		Status:   models.MemberStatusActive,
 		JoinedAt: time.Now(),
 	}
-	if err := s.store.CreateGroupWithAdmin(ctx, group, admin); err != nil {
+	created, err := s.store.CreateGroupWithAdmin(ctx, group, admin)
+	if err != nil {
 		return models.Group{}, err
 	}
-	return group, nil
+	return created, nil
 }
 
 func (s *Service) JoinGroup(ctx context.Context, actorID, shareCode string) (models.Group, error) {

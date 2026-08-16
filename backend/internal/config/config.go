@@ -5,6 +5,7 @@
 //   - FrontendOrigin: origin cho CORS (phải là http(s)://host)
 //   - JWT secrets: access và refresh (bắt buộc, mỗi cái >= 32 ký tự)
 //   - Cookie config: Secure, Domain
+//
 // Hỗ trợ hàm envOrDefault và boolEnv để đọc biến môi trường an toàn.
 package config
 
@@ -25,6 +26,8 @@ type Config struct {
 	JWTRefreshSecret string
 	CookieSecure     bool
 	CookieDomain     string
+	RateLimitMax     int
+	AuthRateLimitMax int
 }
 
 func Load() (Config, error) {
@@ -41,6 +44,8 @@ func Load() (Config, error) {
 		JWTRefreshSecret: os.Getenv("JWT_REFRESH_SECRET"),
 		CookieSecure:     cookieSecure,
 		CookieDomain:     strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
+		RateLimitMax:     intEnvOrDefault("RATE_LIMIT_MAX", 120),
+		AuthRateLimitMax: intEnvOrDefault("AUTH_RATE_LIMIT_MAX", 20),
 	}
 
 	if config.DatabaseURL == "" {
@@ -75,4 +80,18 @@ func boolEnv(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s must be true or false: %w", key, err)
 	}
 	return value, nil
+}
+
+// intEnvOrDefault đọc biến môi trường dạng số nguyên; trả fallback khi thiếu hoặc
+// không hợp lệ để rate limit không chặn nhầm do cấu hình sai.
+func intEnvOrDefault(key string, fallback int) int {
+	rawValue := strings.TrimSpace(os.Getenv(key))
+	if rawValue == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(rawValue)
+	if err != nil || value < 0 {
+		return fallback
+	}
+	return value
 }

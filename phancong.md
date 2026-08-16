@@ -203,13 +203,13 @@ Test tối thiểu:
 
 | Mã | Công việc | Người phụ trách | Trạng thái | Ghi chú |
 |---|---|---|:---:|---|
-| 1 | Struct user, group, membership | Nhật Thành | ☐ | |
-| 2 | Struct expense và split | Nhật Thành | ☐ | |
-| 3 | `SumSplits()` và `SplitEqual()` | Nhật Thành | ☐ | |
-| 4 | Struct batch và settlement | Phúc Khang | ☐ | |
-| 5 | `CalculateNetBalances()` | Phúc Khang | ☐ | |
-| 6 | `SimplifyDebts()` | Phúc Khang | ☐ | |
-| 7 | Table-driven tests và review chéo | Cả hai | ☐ | |
+| 1 | Struct user, group, membership | Nhật Thành | ✅ | `backend/models/` |
+| 2 | Struct expense và split | Nhật Thành | ✅ | `backend/models/` |
+| 3 | `SumSplits()` và `SplitEqual()` | Nhật Thành | ✅ | `backend/services/expense_calc.go` + test |
+| 4 | Struct batch và settlement | Phúc Khang | ✅ | `backend/models/` |
+| 5 | `CalculateNetBalances()` | Phúc Khang | ✅ | `backend/services/settlement_calc.go` + test |
+| 6 | `SimplifyDebts()` | Phúc Khang | ✅ | `backend/services/settlement_calc.go` + test |
+| 7 | Table-driven tests và review chéo | Cả hai | ✅ | `go test ./...` pass toàn bộ |
 
 Trạng thái: ☐ Chưa làm · 🔄 Đang làm · ✅ Xong
 

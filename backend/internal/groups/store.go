@@ -23,7 +23,7 @@ var (
 
 // Store giới hạn các thao tác nhóm, giúp handler/service kiểm thử bằng fake.
 type Store interface {
-	CreateGroupWithAdmin(ctx context.Context, group models.Group, admin models.GroupMember) error
+	CreateGroupWithAdmin(ctx context.Context, group models.Group, admin models.GroupMember) (models.Group, error)
 	GetGroup(ctx context.Context, groupID string) (models.Group, error)
 	GetGroupByShareCode(ctx context.Context, shareCode string) (models.Group, error)
 	GetMembership(ctx context.Context, groupID, userID string) (models.GroupMember, error)
@@ -55,10 +55,10 @@ func scanGroup(rows pgx.Row) (models.Group, error) {
 	return group, nil
 }
 
-func (s *PostgresStore) CreateGroupWithAdmin(ctx context.Context, group models.Group, admin models.GroupMember) error {
+func (s *PostgresStore) CreateGroupWithAdmin(ctx context.Context, group models.Group, admin models.GroupMember) (models.Group, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return models.Group{}, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -69,7 +69,7 @@ func (s *PostgresStore) CreateGroupWithAdmin(ctx context.Context, group models.G
 		group.Name, group.CreatedBy, group.ShareCode, group.Currency,
 	).Scan(&group.ID)
 	if err != nil {
-		return mapUniqueViolation(err, "groups_share_code_key", ErrShareCodeExists)
+		return models.Group{}, mapUniqueViolation(err, "groups_share_code_key", ErrShareCodeExists)
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -78,10 +78,13 @@ func (s *PostgresStore) CreateGroupWithAdmin(ctx context.Context, group models.G
 		group.ID, admin.UserID, admin.Role, admin.Status,
 	)
 	if err != nil {
-		return err
+		return models.Group{}, err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return models.Group{}, err
+	}
+	return group, nil
 }
 
 func (s *PostgresStore) GetGroup(ctx context.Context, groupID string) (models.Group, error) {
