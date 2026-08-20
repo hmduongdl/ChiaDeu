@@ -7,6 +7,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -32,6 +34,8 @@ type Claims struct {
 type TokenPair struct {
 	AccessToken  string
 	RefreshToken string
+	// RefreshJTI định danh phiên (jti claim) — dùng để lưu/rotate phía server.
+	RefreshJTI string
 }
 
 type TokenManager struct {
@@ -56,19 +60,23 @@ func NewTokenManager(accessSecret, refreshSecret string) (*TokenManager, error) 
 }
 
 func (m *TokenManager) CreatePair(userID string) (TokenPair, error) {
-	accessToken, err := m.create(userID, accessTokenType, AccessTokenDuration, m.accessSecret)
+	accessToken, err := m.create(userID, accessTokenType, AccessTokenDuration, m.accessSecret, "")
 	if err != nil {
 		return TokenPair{}, err
 	}
-	refreshToken, err := m.create(userID, refreshTokenType, RefreshTokenDuration, m.refreshSecret)
+	jti, err := randomSessionID()
+	if err != nil {
+		return TokenPair{}, fmt.Errorf("generate session id: %w", err)
+	}
+	refreshToken, err := m.create(userID, refreshTokenType, RefreshTokenDuration, m.refreshSecret, jti)
 	if err != nil {
 		return TokenPair{}, err
 	}
-	return TokenPair{AccessToken: accessToken, RefreshToken: refreshToken}, nil
+	return TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, RefreshJTI: jti}, nil
 }
 
 func (m *TokenManager) CreateAccessToken(userID string) (string, error) {
-	return m.create(userID, accessTokenType, AccessTokenDuration, m.accessSecret)
+	return m.create(userID, accessTokenType, AccessTokenDuration, m.accessSecret, "")
 }
 
 func (m *TokenManager) VerifyAccessToken(rawToken string) (string, error) {
@@ -76,10 +84,29 @@ func (m *TokenManager) VerifyAccessToken(rawToken string) (string, error) {
 }
 
 func (m *TokenManager) VerifyRefreshToken(rawToken string) (string, error) {
-	return m.verify(rawToken, refreshTokenType, m.refreshSecret)
+	userID, _, err := m.VerifyRefreshDetails(rawToken)
+	return userID, err
 }
 
-func (m *TokenManager) create(userID, tokenType string, duration time.Duration, secret []byte) (string, error) {
+// VerifyRefreshDetails xác thực refresh token và trả về userID cùng jti (mã phiên)
+// để kiểm tra/phục vụ rotation phía server.
+func (m *TokenManager) VerifyRefreshDetails(rawToken string) (userID, jti string, err error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(
+		rawToken,
+		claims,
+		func(token *jwt.Token) (any, error) { return m.refreshSecret, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer("chiadeu-api"),
+		jwt.WithExpirationRequired(),
+	)
+	if err != nil || !token.Valid || claims.TokenType != refreshTokenType || claims.Subject == "" {
+		return "", "", ErrInvalidToken
+	}
+	return claims.Subject, claims.ID, nil
+}
+
+func (m *TokenManager) create(userID, tokenType string, duration time.Duration, secret []byte, jti string) (string, error) {
 	now := m.now()
 	claims := Claims{
 		TokenType: tokenType,
@@ -88,6 +115,7 @@ func (m *TokenManager) create(userID, tokenType string, duration time.Duration, 
 			Issuer:    "chiadeu-api",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(duration)),
+			ID:        jti,
 		},
 	}
 
@@ -112,4 +140,13 @@ func (m *TokenManager) verify(rawToken, expectedType string, secret []byte) (str
 		return "", ErrInvalidToken
 	}
 	return claims.Subject, nil
+}
+
+// randomSessionID sinh mã phiên ngẫu nhiên 128-bit dạng hex cho claim jti.
+func randomSessionID() (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw), nil
 }

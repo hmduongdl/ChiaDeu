@@ -83,3 +83,79 @@ func TestServiceValidatesRegistration(t *testing.T) {
 		})
 	}
 }
+
+type memorySessionStore struct {
+	sessions map[string]Session
+}
+
+func (s *memorySessionStore) CreateSession(_ context.Context, session Session) error {
+	if s.sessions == nil {
+		s.sessions = make(map[string]Session)
+	}
+	s.sessions[session.JTI] = session
+	return nil
+}
+
+func (s *memorySessionStore) FindSessionByJTI(_ context.Context, jti string) (Session, error) {
+	session, ok := s.sessions[jti]
+	if !ok {
+		return Session{}, ErrSessionNotFound
+	}
+	return session, nil
+}
+
+func (s *memorySessionStore) RevokeSession(_ context.Context, jti string) error {
+	session, ok := s.sessions[jti]
+	if !ok {
+		return ErrSessionNotFound
+	}
+	revokedAt := time.Now()
+	session.RevokedAt = &revokedAt
+	s.sessions[jti] = session
+	return nil
+}
+
+func TestServiceRotatesAndRevokesSessions(t *testing.T) {
+	tokens, err := NewTokenManager(
+		"session-test-access-secret-with-at-least-thirty-two-characters",
+		"session-test-refresh-secret-with-at-least-thirty-two-characters",
+	)
+	if err != nil {
+		t.Fatalf("create token manager: %v", err)
+	}
+	store := &memoryUserStore{user: User{ID: "user-123", Name: "Test", Email: "test@example.com", CreatedAt: time.Now()}}
+	sessions := &memorySessionStore{}
+	service := NewServiceWithSessions(store, tokens, sessions)
+
+	first, err := service.StartSession(context.Background(), "user-123")
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+	if sessions.sessions[first.RefreshJTI].RefreshTokenHash == "" {
+		t.Fatal("session phải lưu hash refresh token")
+	}
+
+	second, err := service.RotateSession(context.Background(), first.RefreshToken)
+	if err != nil {
+		t.Fatalf("rotate session: %v", err)
+	}
+	if second.RefreshToken == first.RefreshToken {
+		t.Fatal("refresh token phải được xoay sang token mới")
+	}
+	if sessions.sessions[first.RefreshJTI].RevokedAt == nil {
+		t.Fatal("phiên cũ phải bị thu hồi sau khi rotate")
+	}
+
+	// Token cũ đã thu hồi không thể dùng lại.
+	if _, err := service.RotateSession(context.Background(), first.RefreshToken); !errors.Is(err, ErrSessionRevoked) {
+		t.Fatalf("mong đợi ErrSessionRevoked, got %v", err)
+	}
+
+	// Đăng xuất thu hồi phiên hiện tại.
+	if err := service.RevokeSession(context.Background(), second.RefreshToken); err != nil {
+		t.Fatalf("revoke session: %v", err)
+	}
+	if sessions.sessions[second.RefreshJTI].RevokedAt == nil {
+		t.Fatal("logout phải thu hồi phiên")
+	}
+}

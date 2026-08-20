@@ -14,19 +14,26 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/hmduongdl/ChiaDeu/internal/auth"
 	"github.com/hmduongdl/ChiaDeu/internal/config"
+	"github.com/hmduongdl/ChiaDeu/internal/expenses"
+	"github.com/hmduongdl/ChiaDeu/internal/groups"
 	"github.com/hmduongdl/ChiaDeu/internal/handlers"
 	authmiddleware "github.com/hmduongdl/ChiaDeu/internal/middleware"
+	"github.com/hmduongdl/ChiaDeu/internal/settlements"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 type appDependencies struct {
-	frontendOrigin string
-	authHandler    *handlers.AuthHandler
-	authMiddleware fiber.Handler
+	frontendOrigin   string
+	rateLimitMax     int
+	authRateLimitMax int
+	authHandler      *handlers.AuthHandler
+	authMiddleware   fiber.Handler
+	appHandler       *handlers.AppHandler
 }
 
 func main() {
@@ -52,16 +59,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure JWT: %v", err)
 	}
-	authService := auth.NewService(auth.NewPostgresUserStore(pool))
+	sessionStore := auth.NewPostgresSessionStore(pool)
+	authService := auth.NewServiceWithSessions(auth.NewPostgresUserStore(pool), tokens, sessionStore)
 	authHandler := handlers.NewAuthHandler(authService, tokens, handlers.CookieConfig{
 		Secure: appConfig.CookieSecure,
 		Domain: appConfig.CookieDomain,
 	})
 
+	appHandler := handlers.NewAppHandler(
+		groups.NewService(groups.NewPostgresStore(pool)),
+		expenses.NewService(expenses.NewPostgresStore(pool)),
+		settlements.NewPostgresStore(pool),
+	)
+
 	app := newApp(appDependencies{
-		frontendOrigin: appConfig.FrontendOrigin,
-		authHandler:    authHandler,
-		authMiddleware: authmiddleware.AuthMiddleware(tokens),
+		frontendOrigin:   appConfig.FrontendOrigin,
+		rateLimitMax:     appConfig.RateLimitMax,
+		authRateLimitMax: appConfig.AuthRateLimitMax,
+		authHandler:      authHandler,
+		authMiddleware:   authmiddleware.AuthMiddleware(tokens),
+		appHandler:       appHandler,
 	})
 
 	log.Fatal(app.Listen(":" + appConfig.Port))
@@ -79,18 +96,23 @@ func newApp(dependencies appDependencies) *fiber.App {
 	}))
 
 	api := app.Group("/api")
+	if dependencies.rateLimitMax > 0 {
+		api.Use(limiter.New(limiter.Config{Max: dependencies.rateLimitMax, Expiration: time.Minute}))
+	}
 	registerHealthRoute(api)
 	if dependencies.authHandler != nil && dependencies.authMiddleware != nil {
-		registerAuthRoutes(api, dependencies.authHandler, dependencies.authMiddleware)
-		registerApplicationRoutes(api, dependencies.authMiddleware)
+		registerAuthRoutes(api, dependencies.authHandler, dependencies.authMiddleware, dependencies.authRateLimitMax)
+	}
+	if dependencies.appHandler != nil && dependencies.authMiddleware != nil {
+		registerApplicationRoutes(api, dependencies.authMiddleware, dependencies.appHandler)
 	}
 	registerWebhookRoutes(api)
 
-	// Keep the existing deployment-prefixed health URL while auth stays canonical at /api/auth.
+	// Keep the existing deployment-prefixed health/business URL while auth stays canonical at /api/auth.
 	legacyAPI := app.Group("/api/backend")
 	registerHealthRoute(legacyAPI)
-	if dependencies.authMiddleware != nil {
-		registerApplicationRoutes(legacyAPI, dependencies.authMiddleware)
+	if dependencies.appHandler != nil && dependencies.authMiddleware != nil {
+		registerApplicationRoutes(legacyAPI, dependencies.authMiddleware, dependencies.appHandler)
 	}
 	registerWebhookRoutes(legacyAPI)
 
@@ -103,8 +125,11 @@ func registerHealthRoute(api fiber.Router) {
 	})
 }
 
-func registerAuthRoutes(api fiber.Router, handler *handlers.AuthHandler, requireAuth fiber.Handler) {
+func registerAuthRoutes(api fiber.Router, handler *handlers.AuthHandler, requireAuth fiber.Handler, rateLimitMax int) {
 	authRoutes := api.Group("/auth")
+	if rateLimitMax > 0 {
+		authRoutes.Use(limiter.New(limiter.Config{Max: rateLimitMax, Expiration: time.Minute}))
+	}
 	authRoutes.Post("/register", handler.Register)
 	authRoutes.Post("/login", handler.Login)
 	authRoutes.Post("/refresh", handler.Refresh)
@@ -112,19 +137,21 @@ func registerAuthRoutes(api fiber.Router, handler *handlers.AuthHandler, require
 	authRoutes.Get("/me", requireAuth, handler.Me)
 }
 
-func registerApplicationRoutes(api fiber.Router, requireAuth fiber.Handler) {
-	protected := api.Group("", requireAuth)
+func registerApplicationRoutes(api fiber.Router, requireAuth fiber.Handler, app *handlers.AppHandler) {
+	groupsRoutes := api.Group("/groups", requireAuth)
+	groupsRoutes.Post("/", app.CreateGroup)
+	groupsRoutes.Post("/join/:shareCode", app.JoinGroup)
+	groupsRoutes.Get("/:groupId", app.GetGroup)
+	groupsRoutes.Post("/:groupId/expenses", app.CreateExpense)
+	groupsRoutes.Patch("/:groupId/expenses/:expenseId", app.UpdateExpense)
+	groupsRoutes.Get("/:groupId/balances", app.Balances)
+	groupsRoutes.Post("/:groupId/settlement-batches", app.CloseBatch)
+	groupsRoutes.Get("/:groupId/settlement-batches/:batchId", app.GetBatch)
 
-	protected.Post("/auth/link-bank", notImplemented)
-	protected.Get("/transactions", notImplemented)
-	protected.Post("/groups", notImplemented)
-	protected.Post("/groups/join/:shareCode", notImplemented)
-	protected.Get("/groups/:id", notImplemented)
-	protected.Post("/groups/:id/expenses", notImplemented)
-	protected.Get("/groups/:id/balances", notImplemented)
-	protected.Post("/groups/:id/settle", notImplemented)
-	protected.Post("/settlements/:id/qr", notImplemented)
-	protected.Get("/settlements/:id/status", notImplemented)
+	settlementRoutes := api.Group("/settlements", requireAuth)
+	settlementRoutes.Post("/:settlementId/mark-sent", app.MarkSent)
+	settlementRoutes.Post("/:settlementId/confirm", app.Confirm)
+	settlementRoutes.Post("/:settlementId/reject", app.Reject)
 }
 
 func registerWebhookRoutes(api fiber.Router) {

@@ -5,6 +5,7 @@
 //   - Refresh: POST /api/auth/refresh — cấp lại access token từ refresh token
 //   - Logout: POST /api/auth/logout — xóa cookie
 //   - Me: GET /api/auth/me — trả về thông tin user đang đăng nhập
+//
 // Cookie access token dùng HttpOnly + Lax, refresh token dùng HttpOnly + Strict + path hẹp.
 package handlers
 
@@ -86,7 +87,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
 	}
 
-	pair, err := h.tokens.CreatePair(user.ID)
+	pair, err := h.issueTokens(c, user.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
 	}
@@ -96,8 +97,30 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"user": user})
 }
 
+// issueTokens cấp cặp token, kèm lưu phiên khi session store được cấu hình.
+func (h *AuthHandler) issueTokens(c *fiber.Ctx, userID string) (auth.TokenPair, error) {
+	if h.service.HasSessions() {
+		return h.service.StartSession(c.UserContext(), userID)
+	}
+	return h.tokens.CreatePair(userID)
+}
+
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
-	userID, err := h.tokens.VerifyRefreshToken(c.Cookies(refreshCookieName))
+	rawRefresh := c.Cookies(refreshCookieName)
+
+	// Chế độ phiên có trạng thái: rotate phiên và thu hồi phiên cũ phía server.
+	if h.service.HasSessions() {
+		pair, err := h.service.RotateSession(c.UserContext(), rawRefresh)
+		if err != nil {
+			h.clearCookies(c)
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		h.setAccessCookie(c, pair.AccessToken)
+		h.setRefreshCookie(c, pair.RefreshToken)
+		return c.JSON(fiber.Map{"message": "access token refreshed"})
+	}
+
+	userID, err := h.tokens.VerifyRefreshToken(rawRefresh)
 	if err != nil {
 		h.clearCookies(c)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
@@ -121,6 +144,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	_ = h.service.RevokeSession(c.UserContext(), c.Cookies(refreshCookieName))
 	h.clearCookies(c)
 	return c.SendStatus(fiber.StatusNoContent)
 }

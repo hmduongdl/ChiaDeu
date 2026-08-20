@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
@@ -30,12 +31,110 @@ func (e *ValidationError) Error() string {
 }
 
 type Service struct {
-	store UserStore
+	store        UserStore
+	sessionStore SessionStore
+	tokens       *TokenManager
 }
 
 func NewService(store UserStore) *Service {
 	return &Service{store: store}
 }
+
+// NewServiceWithSessions bật chế độ phiên có trạng thái: refresh token được lưu
+// trong bảng sessions, rotate trên mỗi lần refresh và có thể thu hồi.
+func NewServiceWithSessions(store UserStore, tokens *TokenManager, sessions SessionStore) *Service {
+	return &Service{store: store, sessionStore: sessions, tokens: tokens}
+}
+
+// HasSessions cho biết service có lưu phiên phía server hay không.
+func (s *Service) HasSessions() bool {
+	return s.sessionStore != nil
+}
+
+// StartSession cấp cặp token và lưu phiên nếu được cấu hình.
+func (s *Service) StartSession(ctx context.Context, userID string) (TokenPair, error) {
+	if !s.HasSessions() {
+		if s.tokens == nil {
+			return TokenPair{}, ErrSessionsUnavailable
+		}
+		return s.tokens.CreatePair(userID)
+	}
+	pair, err := s.tokens.CreatePair(userID)
+	if err != nil {
+		return TokenPair{}, err
+	}
+	session := Session{
+		JTI:              pair.RefreshJTI,
+		UserID:           userID,
+		RefreshTokenHash: HashRefreshToken(pair.RefreshToken),
+		CreatedAt:        time.Now(),
+		ExpiredAt:        time.Now().Add(RefreshTokenDuration),
+	}
+	if err := s.sessionStore.CreateSession(ctx, session); err != nil {
+		return TokenPair{}, err
+	}
+	return pair, nil
+}
+
+// RotateSession xác thực refresh token và thu hồi phiên cũ, cấp phiên mới.
+func (s *Service) RotateSession(ctx context.Context, rawRefresh string) (TokenPair, error) {
+	if !s.HasSessions() {
+		return TokenPair{}, ErrSessionsUnavailable
+	}
+	userID, jti, err := s.tokens.VerifyRefreshDetails(rawRefresh)
+	if err != nil {
+		return TokenPair{}, ErrInvalidToken
+	}
+	session, err := s.sessionStore.FindSessionByJTI(ctx, jti)
+	if errors.Is(err, ErrSessionNotFound) {
+		return TokenPair{}, ErrInvalidToken
+	}
+	if err != nil {
+		return TokenPair{}, err
+	}
+	if session.RevokedAt != nil {
+		return TokenPair{}, ErrSessionRevoked
+	}
+	if !session.ExpiredAt.After(time.Now()) {
+		return TokenPair{}, ErrSessionExpired
+	}
+	if session.RefreshTokenHash != HashRefreshToken(rawRefresh) {
+		return TokenPair{}, ErrInvalidToken
+	}
+	if session.UserID != userID {
+		return TokenPair{}, ErrInvalidToken
+	}
+	if _, err := s.store.FindUserByID(ctx, userID); err != nil {
+		return TokenPair{}, ErrInvalidToken
+	}
+	if err := s.sessionStore.RevokeSession(ctx, jti); err != nil {
+		return TokenPair{}, err
+	}
+	return s.StartSession(ctx, userID)
+}
+
+// RevokeSession thu hồi phiên của refresh token (dùng cho logout); bỏ qua nếu
+// token không hợp lệ để đăng xuất luôn thành công.
+func (s *Service) RevokeSession(ctx context.Context, rawRefresh string) error {
+	if !s.HasSessions() {
+		return nil
+	}
+	_, jti, err := s.tokens.VerifyRefreshDetails(rawRefresh)
+	if err != nil {
+		return nil
+	}
+	return s.sessionStore.RevokeSession(ctx, jti)
+}
+
+// ErrSessionsUnavailable báo service chưa được cấu hình phiên có trạng thái.
+var ErrSessionsUnavailable = errors.New("session store chưa được cấu hình")
+
+var (
+	// ErrSessionRevoked báo phiên đã bị thu hồi phía server.
+	ErrSessionRevoked = errors.New("phiên đã bị thu hồi")
+	// ErrSessionExpired báo phiên đã hết hạn.
+	ErrSessionExpired = errors.New("phiên đã hết hạn")
+)
 
 func (s *Service) Register(ctx context.Context, name, email, password string) (User, error) {
 	name = strings.TrimSpace(name)

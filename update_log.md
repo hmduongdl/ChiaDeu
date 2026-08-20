@@ -1,5 +1,48 @@
 # Update log
 
+## 2026-08-16 — Backend: models, schema, nghiệp vụ nhóm/khoản chi/quyết toán, API
+
+Triển khai toàn bộ roadmap backend theo Chế độ chia đều linh hoạt, tách theo feature
+branch:
+
+- **Domain models + calc** (`feature/backend-domain-models`): `backend/models/{user,group,expense,settlement}.go`,
+  `backend/services/{expense_calc,settlement_calc}.go` — struct theo schema mục tiêu,
+  `SumSplits`/`SplitEqual` (phần dư chia ổn định), `ValidateExpense`, `CalculateNetBalances`,
+  `SimplifyDebts` (resolver xác định O(n log n)), table-driven tests theo phancong.md.
+- **Migration schema** (`feature/backend-schema-migration`): `backend/migrations/003_target_schema.sql`
+  chuyển schema prototype → integer money `_minor`, role/status membership,
+  `settlement_batches`/`settlements`/`settlement_events`/`audit_logs`/`sessions`,
+  partial unique index một kỳ `OPEN`/nhóm, FK tài chính `RESTRICT`.
+- **Groups/Expenses** (`feature/backend-groups-expenses`): `internal/groups` (tạo nhóm +
+  membership ADMIN trong transaction, join bằng share code, danh sách thành viên),
+  `internal/expenses` (tạo/sửa khoản chi kèm phần chia, kiểm tra thành viên hoạt động,
+  invariant tổng split), `internal/audit` (log append-only), `services.ValidationError`.
+- **Settlements** (`feature/backend-settlements`): `internal/settlements` — chốt kỳ trong
+  transaction (khóa khoản chi chưa chốt, tính balance, chạy resolver, sinh settlements,
+  idempotency key), vòng đời `PENDING → AWAITING_CONFIRMATION → PAID`
+  (`mark-sent`/`confirm`/`reject`, hoàn tất kỳ khi mọi settlement PAID), hủy kỳ khi chưa
+  có giao dịch thanh toán, ghi `settlement_events` + audit.
+- **Refresh token rotation** (`feature/backend-refresh-sessions`): refresh token mang claim
+  `jti`, phiên lưu hash trong `sessions`, mỗi refresh thu hồi phiên cũ và cấp phiên mới,
+  logout thu hồi phía server; vẫn giữ luồng stateless khi chưa cấu hình session store.
+- **API + hardening** (`feature/backend-api`): `internal/handlers/app.go` triển khai contract
+  API nhóm/khoản chi/balance/chốt kỳ/settlement, wire vào `main.go`, rate limit
+  (fiber limiter, `RATE_LIMIT_MAX`, `AUTH_RATE_LIMIT_MAX`), test tích hợp handlers với
+  fake stores cho toàn bộ luồng nghiệp vụ.
+
+- Tệp/dir thay đổi chính: `backend/main.go`, `backend/main_test.go`,
+  `backend/internal/{auth,config,groups,expenses,settlements,audit,handlers,middleware}`,
+  `backend/models/`, `backend/services/`, `backend/migrations/003_target_schema.sql`,
+  `.env.example`, `update_log.md`, `phancong.md`.
+- Kiểm tra: `go build ./...`, `go vet ./...`, `go test ./...` pass toàn bộ; `git diff --check`
+  không lỗi. Chưa chạy kiểm thử chạy thật với database PostgreSQL (không có Docker/DB
+  trong môi trường) — SQL trong migration 003 và các store cần được xác minh bằng
+  integration test thật trước production.
+- Giới hạn/theo dõi: chưa có endpoint lấy danh sách nhóm của user qua API (`GET /groups`);
+  chưa triển khai `VOID` (hủy) khoản chi riêng lẻ; webhook ngân hàng vẫn là stub;
+  vòng đời settlement chưa có màn hình dashboard nhóm phía frontend; `cancel` kỳ chưa xoá
+  `batch_id` trên settlements đã đánh dấu sent (chỉ CANCELLED).
+
 ## 2026-08-12
 
 - Added Figma-based authentication routes:
