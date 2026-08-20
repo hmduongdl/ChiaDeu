@@ -331,12 +331,34 @@ func doRequest(t *testing.T, app *fiber.App, method, path, actor, body string) (
 	}
 	response.Body.Close()
 
-	var payload map[string]any
+	var rawPayload map[string]any
 	if len(rawBody) > 0 {
-		if err := json.Unmarshal(rawBody, &payload); err != nil {
+		if err := json.Unmarshal(rawBody, &rawPayload); err != nil {
 			t.Fatalf("decode JSON %q: %v", rawBody, err)
 		}
 	}
+
+	var payload map[string]any
+	if rawPayload != nil {
+		if successVal, hasSuccess := rawPayload["success"]; hasSuccess {
+			if successVal == true {
+				if dataVal, hasData := rawPayload["data"]; hasData {
+					if dataMap, ok := dataVal.(map[string]any); ok {
+						payload = dataMap
+					} else {
+						payload = rawPayload
+					}
+				} else {
+					payload = rawPayload
+				}
+			} else {
+				payload = rawPayload
+			}
+		} else {
+			payload = rawPayload
+		}
+	}
+
 	return response, payload
 }
 

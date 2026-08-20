@@ -52,7 +52,7 @@ type loginRequest struct {
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	var request registerRequest
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		return errResponse(c, fiber.StatusBadRequest, "invalid request body")
 	}
 
 	// TODO: Add IP/account-based rate limiting before public production launch.
@@ -61,40 +61,40 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		var validationError *auth.ValidationError
 		switch {
 		case errors.As(err, &validationError):
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": validationError.Message})
+			return errResponse(c, fiber.StatusBadRequest, validationError.Message)
 		case errors.Is(err, auth.ErrEmailExists):
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already registered"})
+			return errResponse(c, fiber.StatusConflict, "email already registered")
 		default:
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+			return internalError(c)
 		}
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": user})
+	return success(c, fiber.StatusCreated, fiber.Map{"user": user})
 }
 
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var request loginRequest
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		return errResponse(c, fiber.StatusBadRequest, "invalid request body")
 	}
 
 	// TODO: Add IP/account-based rate limiting before public production launch.
 	user, err := h.service.Authenticate(c.UserContext(), request.Email, request.Password)
 	if errors.Is(err, auth.ErrInvalidCredentials) {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid email or password"})
+		return errResponse(c, fiber.StatusUnauthorized, "invalid email or password")
 	}
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+		return internalError(c)
 	}
 
 	pair, err := h.issueTokens(c, user.ID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+		return internalError(c)
 	}
 	h.setAccessCookie(c, pair.AccessToken)
 	h.setRefreshCookie(c, pair.RefreshToken)
 
-	return c.JSON(fiber.Map{"user": user})
+	return success(c, fiber.StatusOK, fiber.Map{"user": user})
 }
 
 // issueTokens cấp cặp token, kèm lưu phiên khi session store được cấu hình.
@@ -113,34 +113,34 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		pair, err := h.service.RotateSession(c.UserContext(), rawRefresh)
 		if err != nil {
 			h.clearCookies(c)
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+			return unauthorized(c)
 		}
 		h.setAccessCookie(c, pair.AccessToken)
 		h.setRefreshCookie(c, pair.RefreshToken)
-		return c.JSON(fiber.Map{"message": "access token refreshed"})
+		return success(c, fiber.StatusOK, fiber.Map{"message": "access token refreshed"})
 	}
 
 	userID, err := h.tokens.VerifyRefreshToken(rawRefresh)
 	if err != nil {
 		h.clearCookies(c)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		return unauthorized(c)
 	}
 
 	// Ensure the token cannot refresh a session for a user removed from the database.
 	if _, err := h.service.CurrentUser(c.UserContext(), userID); errors.Is(err, auth.ErrUserNotFound) {
 		h.clearCookies(c)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		return unauthorized(c)
 	} else if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+		return internalError(c)
 	}
 
 	accessToken, err := h.tokens.CreateAccessToken(userID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+		return internalError(c)
 	}
 	h.setAccessCookie(c, accessToken)
 
-	return c.JSON(fiber.Map{"message": "access token refreshed"})
+	return success(c, fiber.StatusOK, fiber.Map{"message": "access token refreshed"})
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
@@ -152,18 +152,18 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	userID, ok := authmiddleware.UserID(c)
 	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		return unauthorized(c)
 	}
 
 	user, err := h.service.CurrentUser(c.UserContext(), userID)
 	if errors.Is(err, auth.ErrUserNotFound) {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		return unauthorized(c)
 	}
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+		return internalError(c)
 	}
 
-	return c.JSON(fiber.Map{"user": user})
+	return success(c, fiber.StatusOK, fiber.Map{"user": user})
 }
 
 func (h *AuthHandler) setAccessCookie(c *fiber.Ctx, value string) {

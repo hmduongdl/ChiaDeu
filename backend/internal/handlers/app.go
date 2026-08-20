@@ -43,21 +43,21 @@ func (h *AppHandler) CreateGroup(c *fiber.Ctx) error {
 	}
 	var request createGroupRequest
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		return errResponse(c, fiber.StatusBadRequest, "invalid request body")
 	}
 
 	group, err := h.groups.CreateGroup(c.UserContext(), userID, request.Name, request.Currency)
 	if err != nil {
 		switch {
 		case errors.Is(err, groups.ErrInvalidGroupName), errors.Is(err, groups.ErrInvalidCurrency):
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+			return errResponse(c, fiber.StatusBadRequest, err.Error())
 		case errors.Is(err, groups.ErrUserNotFound):
 			return unauthorized(c)
 		default:
 			return internalError(c)
 		}
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"group": group})
+	return success(c, fiber.StatusCreated, fiber.Map{"group": group})
 }
 
 func (h *AppHandler) JoinGroup(c *fiber.Ctx) error {
@@ -71,18 +71,18 @@ func (h *AppHandler) JoinGroup(c *fiber.Ctx) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, groups.ErrInvalidShareCode):
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "mã chia sẻ không hợp lệ"})
+			return errResponse(c, fiber.StatusNotFound, "mã chia sẻ không hợp lệ")
 		case errors.Is(err, groups.ErrAlreadyMember):
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "bạn đã là thành viên nhóm này"})
+			return errResponse(c, fiber.StatusConflict, "bạn đã là thành viên nhóm này")
 		case errors.Is(err, groups.ErrGroupArchived):
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+			return errResponse(c, fiber.StatusConflict, err.Error())
 		case errors.Is(err, groups.ErrUserNotFound):
 			return unauthorized(c)
 		default:
 			return internalError(c)
 		}
 	}
-	return c.JSON(fiber.Map{"group": group})
+	return success(c, fiber.StatusOK, fiber.Map{"group": group})
 }
 
 func (h *AppHandler) GetGroup(c *fiber.Ctx) error {
@@ -96,14 +96,14 @@ func (h *AppHandler) GetGroup(c *fiber.Ctx) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, groups.ErrGroupNotFound):
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "nhóm không tồn tại"})
+			return errResponse(c, fiber.StatusNotFound, "nhóm không tồn tại")
 		case errors.Is(err, groups.ErrNotMember):
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "bạn không phải là thành viên nhóm"})
+			return errResponse(c, fiber.StatusForbidden, "bạn không phải là thành viên nhóm")
 		default:
 			return internalError(c)
 		}
 	}
-	return c.JSON(fiber.Map{"group": detail.Group, "members": detail.Members})
+	return success(c, fiber.StatusOK, fiber.Map{"group": detail.Group, "members": detail.Members})
 }
 
 // ----------------------------------------------------------------------------
@@ -133,18 +133,18 @@ func (h *AppHandler) CreateExpense(c *fiber.Ctx) error {
 
 	var request expenseRequest
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		return errResponse(c, fiber.StatusBadRequest, "invalid request body")
 	}
 	input, err := request.toInput()
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return errResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	expense, splits, err := h.expenses.CreateExpense(c.UserContext(), userID, groupID, input)
 	if err != nil {
 		return mapExpenseError(c, err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"expense": expense, "splits": splits})
+	return success(c, fiber.StatusCreated, fiber.Map{"expense": expense, "splits": splits})
 }
 
 func (h *AppHandler) UpdateExpense(c *fiber.Ctx) error {
@@ -157,18 +157,18 @@ func (h *AppHandler) UpdateExpense(c *fiber.Ctx) error {
 
 	var request expenseRequest
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		return errResponse(c, fiber.StatusBadRequest, "invalid request body")
 	}
 	input, err := request.toInput()
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return errResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	expense, splits, err := h.expenses.UpdateExpense(c.UserContext(), userID, groupID, expenseID, input)
 	if err != nil {
 		return mapExpenseError(c, err)
 	}
-	return c.JSON(fiber.Map{"expense": expense, "splits": splits})
+	return success(c, fiber.StatusOK, fiber.Map{"expense": expense, "splits": splits})
 }
 
 func (h *AppHandler) Balances(c *fiber.Ctx) error {
@@ -185,7 +185,7 @@ func (h *AppHandler) Balances(c *fiber.Ctx) error {
 	detail, err := h.groups.GetGroup(c.UserContext(), userID, groupID)
 	if err != nil {
 		if errors.Is(err, groups.ErrNotMember) || errors.Is(err, groups.ErrGroupNotFound) {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "không thể xem số dư nhóm này"})
+			return errResponse(c, fiber.StatusForbidden, "không thể xem số dư nhóm này")
 		}
 		return internalError(c)
 	}
@@ -203,7 +203,7 @@ func (h *AppHandler) Balances(c *fiber.Ctx) error {
 			"balanceMinor": balanceMinor,
 		})
 	}
-	return c.JSON(fiber.Map{"balances": result})
+	return success(c, fiber.StatusOK, fiber.Map{"balances": result})
 }
 
 // ----------------------------------------------------------------------------
@@ -229,25 +229,25 @@ func (h *AppHandler) CloseBatch(c *fiber.Ctx) error {
 		}
 	}
 	if key == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "thiếu idempotency key"})
+		return errResponse(c, fiber.StatusBadRequest, "thiếu idempotency key")
 	}
 
 	snapshot, err := h.settlements.CloseBatch(c.UserContext(), groupID, userID, key)
 	if err != nil {
 		switch {
 		case errors.Is(err, settlements.ErrNotAdmin):
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "chỉ quản trị viên mới được chốt kỳ"})
+			return errResponse(c, fiber.StatusForbidden, "chỉ quản trị viên mới được chốt kỳ")
 		case errors.Is(err, settlements.ErrBatchAlreadyOpen):
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "nhóm đã có một kỳ đang mở"})
+			return errResponse(c, fiber.StatusConflict, "nhóm đã có một kỳ đang mở")
 		case errors.Is(err, settlements.ErrNoOpenExpenses):
-			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "không có khoản chi nào để chốt"})
+			return errResponse(c, fiber.StatusUnprocessableEntity, "không có khoản chi nào để chốt")
 		case errors.Is(err, settlements.ErrInvalidExpenseData):
-			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "dữ liệu khoản chi không hợp lệ"})
+			return errResponse(c, fiber.StatusUnprocessableEntity, "dữ liệu khoản chi không hợp lệ")
 		default:
 			return internalError(c)
 		}
 	}
-	return c.Status(fiber.StatusCreated).JSON(snapshot)
+	return success(c, fiber.StatusCreated, snapshot)
 }
 
 func (h *AppHandler) GetBatch(c *fiber.Ctx) error {
@@ -262,14 +262,14 @@ func (h *AppHandler) GetBatch(c *fiber.Ctx) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, settlements.ErrBatchNotFound):
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "kỳ quyết toán không tồn tại"})
+			return errResponse(c, fiber.StatusNotFound, "kỳ quyết toán không tồn tại")
 		case errors.Is(err, settlements.ErrNotGroupMember):
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "bạn không phải là thành viên nhóm"})
+			return errResponse(c, fiber.StatusForbidden, "bạn không phải là thành viên nhóm")
 		default:
 			return internalError(c)
 		}
 	}
-	return c.JSON(snapshot)
+	return success(c, fiber.StatusOK, snapshot)
 }
 
 func (h *AppHandler) MarkSent(c *fiber.Ctx) error {
@@ -297,45 +297,37 @@ func (h *AppHandler) settleTransition(c *fiber.Ctx, action settleFunc) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, settlements.ErrSettlementNotFound):
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "giao dịch hoàn tiền không tồn tại"})
+			return errResponse(c, fiber.StatusNotFound, "giao dịch hoàn tiền không tồn tại")
 		case errors.Is(err, settlements.ErrNotGroupMember),
 			errors.Is(err, settlements.ErrNotPayer),
 			errors.Is(err, settlements.ErrNotRecipient):
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": err.Error()})
+			return errResponse(c, fiber.StatusForbidden, err.Error())
 		case errors.Is(err, settlements.ErrBatchClosed), errors.Is(err, settlements.ErrInvalidTransition):
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+			return errResponse(c, fiber.StatusConflict, err.Error())
 		default:
 			return internalError(c)
 		}
 	}
-	return c.JSON(fiber.Map{"settlement": settlement})
+	return success(c, fiber.StatusOK, fiber.Map{"settlement": settlement})
 }
 
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
 
-func unauthorized(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
-}
-
-func internalError(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
-}
-
 func mapExpenseError(c *fiber.Ctx, err error) error {
 	var validationError *services.ValidationError
 	switch {
 	case errors.As(err, &validationError):
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": validationError.Message})
+		return errResponse(c, fiber.StatusBadRequest, validationError.Message)
 	case errors.Is(err, expenses.ErrNotActiveMember):
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "người ứng hoặc người chia không phải thành viên hoạt động"})
+		return errResponse(c, fiber.StatusBadRequest, "người ứng hoặc người chia không phải thành viên hoạt động")
 	case errors.Is(err, expenses.ErrNotOwner):
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "chỉ người tạo khoản chi mới được sửa"})
+		return errResponse(c, fiber.StatusForbidden, "chỉ người tạo khoản chi mới được sửa")
 	case errors.Is(err, expenses.ErrExpenseLocked), errors.Is(err, expenses.ErrExpenseVoided):
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "khoản chi không thể sửa"})
+		return errResponse(c, fiber.StatusConflict, "khoản chi không thể sửa")
 	case errors.Is(err, expenses.ErrExpenseNotFound):
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "khoản chi không tồn tại"})
+		return errResponse(c, fiber.StatusNotFound, "khoản chi không tồn tại")
 	default:
 		return internalError(c)
 	}

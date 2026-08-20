@@ -124,3 +124,13 @@ branch:
 - Tệp/dir thay đổi chính: `backend/services/expense_calc.go`
 - Kiểm tra: `go test ./...` đạt 100% (pass xanh).
 - Giới hạn/theo dõi: Không có.
+
+## 2026-08-20 — Refactor Backend sang Vercel Serverless Functions
+
+- Tái cấu trúc backend từ Fiber server truyền thống sang Vercel Serverless Go Functions.
+- Tạo gói helper dùng chung `backend/internal/vercel` chứa middleware CORS, Auth (JWT cookie), cấu hình database pool tối ưu (MaxConns = 2) cho môi trường serverless, và các helper response định dạng JSON chuẩn.
+- Triển khai 16 file serverless handlers tương ứng các API dưới thư mục `backend/api/` (chia theo từng folder con độc lập để tránh xung đột package name khi compile cục bộ).
+- Cấu hình lại `vercel.json` ở root để map các route cụ thể (specific) và động (dynamic) theo đúng thứ tự ưu tiên, kết nối cả frontend Next.js và các Serverless Functions của backend.
+- Tệp/dir thay đổi chính: `vercel.json`, `backend/api/`, `backend/internal/vercel/`, `update_log.md`, `AGENTS.md`.
+- Kiểm tra: `go build ./...` và `go test ./...` chạy thành công toàn bộ.
+- Giới hạn/theo dõi: Cần thiết lập biến môi trường trên Vercel Dashboard trước khi deploy. Database PostgreSQL nên bật connection pooler (như Neon/Supabase Pooler) vì môi trường serverless sẽ sinh ra nhiều connection ngắn hạn.

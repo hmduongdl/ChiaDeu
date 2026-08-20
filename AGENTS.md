@@ -19,3 +19,8 @@ backend, configuration, dependency, documentation, and tooling changes.
 
 Before the final response, verify that both the requested code change and its
 corresponding `update_log.md` entry are present in the working tree.
+
+## Go Models & TypeScript Types Sync Rule
+
+Mỗi khi cấu trúc struct trong Go (`backend/models/*.go`) thay đổi hoặc có thêm thực thể mới, lập trình viên (hoặc AI Agent) bắt buộc phải cập nhật đồng bộ các interface tương ứng trong file định nghĩa kiểu TypeScript của frontend tại `frontend/src/types/api.ts`. Điều này đảm bảo tính nhất quán kiểu dữ liệu (Type Safety) trên toàn bộ hệ thống fullstack.
+
