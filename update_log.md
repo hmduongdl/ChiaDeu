@@ -154,3 +154,16 @@ branch:
 - Xóa thư mục `backend/pkg/serverless/` (trung gian không cần thiết).
 - Cập nhật `vercel.json`: route cụ thể nhiều segment (join/:shareCode, balances, expenses/:id, batches/:id, settlements/:id/:action) đứng **trước** route động (:groupId) để tránh match nhầm.
 - Kiểm tra: `go build ./...` và `go test ./...` pass toàn bộ.
+
+## 2026-08-20
+- Triển khai UI mới cho trang Landing Page (Trang chủ `/`) theo thiết kế mới.
+- Cập nhật `tailwind.config.ts` để thêm các màu sắc thiết kế và plugins (`@tailwindcss/forms`, `@tailwindcss/container-queries`).
+- Cấu hình layout chính để sử dụng font chữ Inter và Material Symbols.
+- Cấu hình `next.config.js` để cho phép load ảnh từ `lh3.googleusercontent.com`.
+- Thêm style cho `glass-card` vào `globals.css`.
+- Các nút Đăng nhập và Bắt đầu được gán `href` tương ứng tới `/login` và `/register`.
+- Không thực hiện unit tests/lint do chỉ là cập nhật UI tĩnh.
+- Thay thế card tĩnh tại Hero banner bằng animation chia tiền sử dụng `framer-motion` (Component: `SplitBillAnimation`).
+- Sử dụng `lucide-react` cho icons avatar trong animation thay vì font Material.
+- Animation lặp chu kỳ hiển thị tổng tiền và 4 avatar kèm số tiền chia nhỏ (type: "spring").
+- Hỗ trợ chế độ `prefers-reduced-motion` giúp tắt animation và hiện card tĩnh cho người dùng có tuỳ chọn này.
