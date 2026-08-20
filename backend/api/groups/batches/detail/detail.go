@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/hmduongdl/ChiaDeu/internal/settlements"
-	"github.com/hmduongdl/ChiaDeu/internal/vercel"
+	"github.com/hmduongdl/ChiaDeu/pkg/settlements"
+	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 )
 
 // Handler xử lý GET /api/groups/:groupId/settlement-batches/:batchId

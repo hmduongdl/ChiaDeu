@@ -134,3 +134,8 @@ branch:
 - Tệp/dir thay đổi chính: `vercel.json`, `backend/api/`, `backend/internal/vercel/`, `update_log.md`, `AGENTS.md`.
 - Kiểm tra: `go build ./...` và `go test ./...` chạy thành công toàn bộ.
 - Giới hạn/theo dõi: Cần thiết lập biến môi trường trên Vercel Dashboard trước khi deploy. Database PostgreSQL nên bật connection pooler (như Neon/Supabase Pooler) vì môi trường serverless sẽ sinh ra nhiều connection ngắn hạn.
+
+## 2026-08-20 — Sửa lỗi Vercel Go Serverless (Internal Package Constraint)
+
+- Đổi tên thư mục `backend/internal/` thành `backend/pkg/` để tránh quy tắc giới hạn package `internal` của Go Compiler khi build bằng `@vercel/go`. Do Vercel tạo một main package bọc ngoài không thuộc cấu trúc dự án gốc (`command-line-arguments` / `handler`), nó không được phép import code nằm trong thư mục `internal`.
+- Cập nhật lại toàn bộ các lệnh import trong các module Go từ `"github.com/hmduongdl/ChiaDeu/internal/..."` sang `"github.com/hmduongdl/ChiaDeu/pkg/..."`.

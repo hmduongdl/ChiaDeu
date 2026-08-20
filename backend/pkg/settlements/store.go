@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hmduongdl/ChiaDeu/internal/audit"
+	"github.com/hmduongdl/ChiaDeu/pkg/audit"
 	"github.com/hmduongdl/ChiaDeu/models"
 	"github.com/hmduongdl/ChiaDeu/services"
 	"github.com/jackc/pgx/v5"

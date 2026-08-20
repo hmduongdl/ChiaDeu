@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/hmduongdl/ChiaDeu/internal/auth"
-	"github.com/hmduongdl/ChiaDeu/internal/config"
-	"github.com/hmduongdl/ChiaDeu/internal/vercel"
+	"github.com/hmduongdl/ChiaDeu/pkg/auth"
+	"github.com/hmduongdl/ChiaDeu/pkg/config"
+	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 )
 
 // Handler xử lý POST /api/auth/logout

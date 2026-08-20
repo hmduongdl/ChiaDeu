@@ -7,7 +7,7 @@ package middleware
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/hmduongdl/ChiaDeu/internal/auth"
+	"github.com/hmduongdl/ChiaDeu/pkg/auth"
 )
 
 const userIDLocal = "authenticatedUserID"

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hmduongdl/ChiaDeu/internal/expenses"
-	"github.com/hmduongdl/ChiaDeu/internal/vercel"
+	"github.com/hmduongdl/ChiaDeu/pkg/expenses"
+	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 	"github.com/hmduongdl/ChiaDeu/models"
 	"github.com/hmduongdl/ChiaDeu/services"
 )

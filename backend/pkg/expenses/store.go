@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/hmduongdl/ChiaDeu/internal/audit"
+	"github.com/hmduongdl/ChiaDeu/pkg/audit"
 	"github.com/hmduongdl/ChiaDeu/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/hmduongdl/ChiaDeu/internal/groups"
-	"github.com/hmduongdl/ChiaDeu/internal/vercel"
+	"github.com/hmduongdl/ChiaDeu/pkg/groups"
+	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 )
 
 // Handler xử lý GET /api/groups/:groupId

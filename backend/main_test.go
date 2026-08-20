@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/hmduongdl/ChiaDeu/internal/auth"
-	"github.com/hmduongdl/ChiaDeu/internal/handlers"
-	authmiddleware "github.com/hmduongdl/ChiaDeu/internal/middleware"
+	"github.com/hmduongdl/ChiaDeu/pkg/auth"
+	"github.com/hmduongdl/ChiaDeu/pkg/handlers"
+	authmiddleware "github.com/hmduongdl/ChiaDeu/pkg/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 

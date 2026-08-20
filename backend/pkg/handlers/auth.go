@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/hmduongdl/ChiaDeu/internal/auth"
-	authmiddleware "github.com/hmduongdl/ChiaDeu/internal/middleware"
+	"github.com/hmduongdl/ChiaDeu/pkg/auth"
+	authmiddleware "github.com/hmduongdl/ChiaDeu/pkg/middleware"
 )
 
 const (

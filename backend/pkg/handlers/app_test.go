@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/hmduongdl/ChiaDeu/internal/expenses"
-	"github.com/hmduongdl/ChiaDeu/internal/groups"
-	"github.com/hmduongdl/ChiaDeu/internal/settlements"
+	"github.com/hmduongdl/ChiaDeu/pkg/expenses"
+	"github.com/hmduongdl/ChiaDeu/pkg/groups"
+	"github.com/hmduongdl/ChiaDeu/pkg/settlements"
 	"github.com/hmduongdl/ChiaDeu/models"
 )
 

@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/hmduongdl/ChiaDeu/internal/vercel"
+	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 )
 
 // Handler xử lý GET /api/health hoặc GET /api/backend/health

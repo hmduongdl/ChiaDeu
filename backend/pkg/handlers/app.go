@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/hmduongdl/ChiaDeu/internal/expenses"
-	"github.com/hmduongdl/ChiaDeu/internal/groups"
-	authmiddleware "github.com/hmduongdl/ChiaDeu/internal/middleware"
-	"github.com/hmduongdl/ChiaDeu/internal/settlements"
+	"github.com/hmduongdl/ChiaDeu/pkg/expenses"
+	"github.com/hmduongdl/ChiaDeu/pkg/groups"
+	authmiddleware "github.com/hmduongdl/ChiaDeu/pkg/middleware"
+	"github.com/hmduongdl/ChiaDeu/pkg/settlements"
 	"github.com/hmduongdl/ChiaDeu/models"
 	"github.com/hmduongdl/ChiaDeu/services"
 )

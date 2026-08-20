@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/hmduongdl/ChiaDeu/internal/vercel"
+	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 )
 
 // Handler xử lý POST /api/webhooks/:provider
