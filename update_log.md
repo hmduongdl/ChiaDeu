@@ -96,3 +96,17 @@ branch:
 - Main changed files: `README.md`, `schema.md`, `phancong.md`, and `update_log.md`.
 - Validation: searched the repository documentation to confirm the superseded Vietnamese label is absent; `git diff --check` passed. Application tests/build were not run because this is a terminology-only documentation change.
 - Known limitations/follow-up: `MULTI_CREDITOR` remains the internal technical identifier; UI copy should use “Chế độ chia đều linh hoạt” when the business screens are implemented.
+
+## 2026-08-20 — Phân tích kiến trúc Backend
+
+- Tạo file tài liệu `backend_analysis.md` phân tích toàn bộ cấu trúc thư mục, kiến trúc và công nghệ sử dụng của phần Backend (Golang, Fiber, PostgreSQL). Tài liệu cung cấp cái nhìn tổng quan về chức năng của từng thư mục (`internal`, `models`, `services`, `migrations`) và luồng hoạt động chính để hỗ trợ việc bảo trì và phát triển tiếp theo.
+- Tệp/dir thay đổi chính: `backend_analysis.md` (tạo mới trong thư mục artifacts), `update_log.md`.
+- Kiểm tra: Không yêu cầu build code do chỉ tạo tài liệu phân tích. Đã đọc và tổng hợp thông tin từ `go.mod`, `main.go` và cấu trúc thư mục thực tế của `backend`.
+- Giới hạn/theo dõi: Phân tích dựa trên hiện trạng code, tài liệu này có thể cần cập nhật nếu kiến trúc backend có thay đổi lớn trong tương lai.
+
+## 2026-08-20 — Phân tích thuật toán chia tiền và chốt công nợ
+
+- Giải thích chi tiết hai thuật toán cốt lõi trong `services/`: thuật toán chia đều khoản chi (`SplitEqual` trong `expense_calc.go`) và thuật toán tối giản hóa công nợ (`SimplifyDebts` trong `settlement_calc.go`). Thuật toán xử lý tốt các trường hợp số lẻ (phân bổ phần dư) và sử dụng phương pháp tham lam (greedy) có sắp xếp để giảm thiểu số lượng giao dịch thanh toán chéo.
+- Tệp/dir thay đổi chính: Không sửa code, chỉ tạo log và giải thích trên chat.
+- Kiểm tra: Không yêu cầu build code.
+- Giới hạn/theo dõi: Thuật toán SimplifyDebts hiện tại giải quyết bài toán theo hướng xác định (deterministic) O(N log N) để tối thiểu hóa số giao dịch cục bộ, không phải thuật toán tìm số giao dịch tuyệt đối nhỏ nhất (NP-Hard).
