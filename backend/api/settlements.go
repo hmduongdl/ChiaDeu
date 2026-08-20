@@ -5,18 +5,24 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/hmduongdl/ChiaDeu/models"
 	"github.com/hmduongdl/ChiaDeu/pkg/settlements"
 	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
-	"github.com/hmduongdl/ChiaDeu/models"
 )
 
-type settleFunc func(ctx context.Context, settlementID, actorID string) (models.Settlement, error)
+// Settlements xử lý tất cả /api/settlements/:settlementId/:action
+// action (từ query param "action") = mark-sent | confirm | reject
+func Settlements(w http.ResponseWriter, r *http.Request) {
+	if vercel.HandleCORS(w, r) {
+		return
+	}
 
-// Handler xử lý POST /api/settlements/:settlementId/:action (mark-sent/confirm/reject)
-func Handler(w http.ResponseWriter, r *http.Request) {
 	vercel.WithAuth(handleSettlementAction)(w, r)
 }
 
+type settleFunc func(ctx context.Context, settlementID, actorID string) (models.Settlement, error)
+
+// handleSettlementAction phân nhánh theo query param "action"
 func handleSettlementAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		vercel.SendError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -43,22 +49,22 @@ func handleSettlementAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settlementsStore := vercel.GetSettlementsStore(pool)
+	store := vercel.GetSettlementsStore(pool)
 
-	var actionFn settleFunc
+	var fn settleFunc
 	switch actionStr {
 	case "mark-sent":
-		actionFn = settlementsStore.MarkSent
+		fn = store.MarkSent
 	case "confirm":
-		actionFn = settlementsStore.Confirm
+		fn = store.Confirm
 	case "reject":
-		actionFn = settlementsStore.Reject
+		fn = store.Reject
 	default:
-		vercel.SendError(w, http.StatusBadRequest, "hành động không hợp lệ")
+		vercel.SendError(w, http.StatusBadRequest, "hành động không hợp lệ, dùng: mark-sent | confirm | reject")
 		return
 	}
 
-	settlement, err := actionFn(ctx, settlementID, userID)
+	settlement, err := fn(ctx, settlementID, userID)
 	if err != nil {
 		switch {
 		case errors.Is(err, settlements.ErrSettlementNotFound):
@@ -67,7 +73,8 @@ func handleSettlementAction(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, settlements.ErrNotPayer),
 			errors.Is(err, settlements.ErrNotRecipient):
 			vercel.SendError(w, http.StatusForbidden, err.Error())
-		case errors.Is(err, settlements.ErrBatchClosed), errors.Is(err, settlements.ErrInvalidTransition):
+		case errors.Is(err, settlements.ErrBatchClosed),
+			errors.Is(err, settlements.ErrInvalidTransition):
 			vercel.SendError(w, http.StatusConflict, err.Error())
 		default:
 			vercel.SendError(w, http.StatusInternalServerError, "internal server error")

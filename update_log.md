@@ -139,3 +139,18 @@ branch:
 
 - Đổi tên thư mục `backend/internal/` thành `backend/pkg/` để tránh quy tắc giới hạn package `internal` của Go Compiler khi build bằng `@vercel/go`. Do Vercel tạo một main package bọc ngoài không thuộc cấu trúc dự án gốc (`command-line-arguments` / `handler`), nó không được phép import code nằm trong thư mục `internal`.
 - Cập nhật lại toàn bộ các lệnh import trong các module Go từ `"github.com/hmduongdl/ChiaDeu/internal/..."` sang `"github.com/hmduongdl/ChiaDeu/pkg/..."`.
+
+## 2026-08-20 — Gộp Serverless Functions để đáp ứng giới hạn Hobby plan (12 functions)
+
+- Vercel Hobby plan giới hạn tối đa 12 Serverless Functions. Backend ban đầu có 17 file riêng lẻ → vượt giới hạn.
+- Gộp lại còn **7 Serverless Functions** theo nhóm resource:
+  - `backend/api/health.go` — GET /api/health
+  - `backend/api/auth.go` — register, login, refresh, logout, me (phân nhánh qua `?sub=`)
+  - `backend/api/groups.go` — create, join, detail, balances (phân nhánh qua `?sub=`)
+  - `backend/api/expenses.go` — create, update expense (phân nhánh qua `?sub=`)
+  - `backend/api/batches.go` — create, detail settlement-batches (phân nhánh qua `?sub=`)
+  - `backend/api/settlements.go` — mark-sent, confirm, reject (phân nhánh qua `?action=`)
+  - `backend/api/webhooks.go` — sepay, payos, momo (phân nhánh qua `?provider=`)
+- Xóa thư mục `backend/pkg/serverless/` (trung gian không cần thiết).
+- Cập nhật `vercel.json`: route cụ thể nhiều segment (join/:shareCode, balances, expenses/:id, batches/:id, settlements/:id/:action) đứng **trước** route động (:groupId) để tránh match nhầm.
+- Kiểm tra: `go build ./...` và `go test ./...` pass toàn bộ.

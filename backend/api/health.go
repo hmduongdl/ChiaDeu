@@ -6,8 +6,8 @@ import (
 	"github.com/hmduongdl/ChiaDeu/pkg/vercel"
 )
 
-// Handler xử lý GET /api/health hoặc GET /api/backend/health
-func Handler(w http.ResponseWriter, r *http.Request) {
+// Health xử lý GET /api/health và GET /api/backend/health
+func Health(w http.ResponseWriter, r *http.Request) {
 	if vercel.HandleCORS(w, r) {
 		return
 	}

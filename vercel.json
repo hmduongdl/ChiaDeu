@@ -6,120 +6,181 @@
       "use": "@vercel/next"
     },
     {
-      "src": "backend/api/**/*.go",
+      "src": "backend/api/health.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "backend/api/auth.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "backend/api/groups.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "backend/api/expenses.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "backend/api/batches.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "backend/api/settlements.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "backend/api/webhooks.go",
       "use": "@vercel/go"
     }
   ],
   "routes": [
     {
-      "src": "/api/health",
-      "dest": "backend/api/health/health.go"
+      "comment": "=== HEALTH (không có param động) ===",
+      "src": "^/api/health$",
+      "dest": "backend/api/health.go"
     },
     {
-      "src": "/api/backend/health",
-      "dest": "backend/api/health/health.go"
+      "src": "^/api/backend/health$",
+      "dest": "backend/api/health.go"
+    },
+
+    {
+      "comment": "=== AUTH (sub = register|login|refresh|logout|me) ===",
+      "src": "^/api/auth/register$",
+      "dest": "backend/api/auth.go?sub=register"
     },
     {
-      "src": "/api/auth/register",
-      "dest": "backend/api/auth/register/register.go"
+      "src": "^/api/auth/login$",
+      "dest": "backend/api/auth.go?sub=login"
     },
     {
-      "src": "/api/auth/login",
-      "dest": "backend/api/auth/login/login.go"
+      "src": "^/api/auth/refresh$",
+      "dest": "backend/api/auth.go?sub=refresh"
     },
     {
-      "src": "/api/auth/refresh",
-      "dest": "backend/api/auth/refresh/refresh.go"
+      "src": "^/api/auth/logout$",
+      "dest": "backend/api/auth.go?sub=logout"
     },
     {
-      "src": "/api/auth/logout",
-      "dest": "backend/api/auth/logout/logout.go"
+      "src": "^/api/auth/me$",
+      "dest": "backend/api/auth.go?sub=me"
     },
     {
-      "src": "/api/auth/me",
-      "dest": "backend/api/auth/me/me.go"
+      "src": "^/api/backend/auth/register$",
+      "dest": "backend/api/auth.go?sub=register"
     },
     {
-      "src": "/api/groups/join/(?<shareCode>[^/]+)",
-      "dest": "backend/api/groups/join/join.go?shareCode=$shareCode"
+      "src": "^/api/backend/auth/login$",
+      "dest": "backend/api/auth.go?sub=login"
     },
     {
-      "src": "/api/groups/(?<groupId>[^/]+)/balances",
-      "dest": "backend/api/groups/balances/balances.go?groupId=$groupId"
+      "src": "^/api/backend/auth/refresh$",
+      "dest": "backend/api/auth.go?sub=refresh"
     },
     {
-      "src": "/api/groups/(?<groupId>[^/]+)/expenses/(?<expenseId>[^/]+)",
-      "dest": "backend/api/groups/expenses/detail/detail.go?groupId=$groupId&expenseId=$expenseId"
+      "src": "^/api/backend/auth/logout$",
+      "dest": "backend/api/auth.go?sub=logout"
     },
     {
-      "src": "/api/groups/(?<groupId>[^/]+)/expenses",
-      "dest": "backend/api/groups/expenses/index/index.go?groupId=$groupId"
+      "src": "^/api/backend/auth/me$",
+      "dest": "backend/api/auth.go?sub=me"
+    },
+
+    {
+      "comment": "=== SETTLEMENTS (sub cố định trước groupId dynamic) ===",
+      "src": "^/api/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)$",
+      "dest": "backend/api/settlements.go?settlementId=$settlementId&action=$action"
     },
     {
-      "src": "/api/groups/(?<groupId>[^/]+)/settlement-batches/(?<batchId>[^/]+)",
-      "dest": "backend/api/groups/batches/detail/detail.go?groupId=$groupId&batchId=$batchId"
+      "src": "^/api/backend/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)$",
+      "dest": "backend/api/settlements.go?settlementId=$settlementId&action=$action"
+    },
+
+    {
+      "comment": "=== WEBHOOKS ===",
+      "src": "^/api/webhooks/(?<provider>sepay|payos|momo)$",
+      "dest": "backend/api/webhooks.go?provider=$provider"
     },
     {
-      "src": "/api/groups/(?<groupId>[^/]+)/settlement-batches",
-      "dest": "backend/api/groups/batches/index/index.go?groupId=$groupId"
+      "src": "^/api/backend/webhooks/(?<provider>sepay|payos|momo)$",
+      "dest": "backend/api/webhooks.go?provider=$provider"
+    },
+
+    {
+      "comment": "=== GROUPS: route nhiều segment cố định đứng trước route dynamic ===",
+      "src": "^/api/groups/join/(?<shareCode>[^/]+)$",
+      "dest": "backend/api/groups.go?sub=join&shareCode=$shareCode"
     },
     {
-      "src": "/api/groups/(?<groupId>[^/]+)",
-      "dest": "backend/api/groups/detail/detail.go?groupId=$groupId"
+      "src": "^/api/backend/groups/join/(?<shareCode>[^/]+)$",
+      "dest": "backend/api/groups.go?sub=join&shareCode=$shareCode"
     },
     {
-      "src": "/api/groups",
-      "dest": "backend/api/groups/index/index.go"
+      "src": "^/api/groups/(?<groupId>[^/]+)/balances$",
+      "dest": "backend/api/groups.go?sub=balances&groupId=$groupId"
     },
     {
-      "src": "/api/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)",
-      "dest": "backend/api/settlements/action/action.go?settlementId=$settlementId&action=$action"
+      "src": "^/api/backend/groups/(?<groupId>[^/]+)/balances$",
+      "dest": "backend/api/groups.go?sub=balances&groupId=$groupId"
+    },
+
+    {
+      "comment": "=== EXPENSES ===",
+      "src": "^/api/groups/(?<groupId>[^/]+)/expenses/(?<expenseId>[^/]+)$",
+      "dest": "backend/api/expenses.go?sub=update&groupId=$groupId&expenseId=$expenseId"
     },
     {
-      "src": "/api/webhooks/(?<provider>sepay|payos|momo)",
-      "dest": "backend/api/webhooks/webhooks.go?provider=$provider"
+      "src": "^/api/backend/groups/(?<groupId>[^/]+)/expenses/(?<expenseId>[^/]+)$",
+      "dest": "backend/api/expenses.go?sub=update&groupId=$groupId&expenseId=$expenseId"
     },
     {
-      "src": "/api/backend/groups/join/(?<shareCode>[^/]+)",
-      "dest": "backend/api/groups/join/join.go?shareCode=$shareCode"
+      "src": "^/api/groups/(?<groupId>[^/]+)/expenses$",
+      "dest": "backend/api/expenses.go?sub=create&groupId=$groupId"
     },
     {
-      "src": "/api/backend/groups/(?<groupId>[^/]+)/balances",
-      "dest": "backend/api/groups/balances/balances.go?groupId=$groupId"
+      "src": "^/api/backend/groups/(?<groupId>[^/]+)/expenses$",
+      "dest": "backend/api/expenses.go?sub=create&groupId=$groupId"
+    },
+
+    {
+      "comment": "=== BATCHES ===",
+      "src": "^/api/groups/(?<groupId>[^/]+)/settlement-batches/(?<batchId>[^/]+)$",
+      "dest": "backend/api/batches.go?sub=detail&groupId=$groupId&batchId=$batchId"
     },
     {
-      "src": "/api/backend/groups/(?<groupId>[^/]+)/expenses/(?<expenseId>[^/]+)",
-      "dest": "backend/api/groups/expenses/detail/detail.go?groupId=$groupId&expenseId=$expenseId"
+      "src": "^/api/backend/groups/(?<groupId>[^/]+)/settlement-batches/(?<batchId>[^/]+)$",
+      "dest": "backend/api/batches.go?sub=detail&groupId=$groupId&batchId=$batchId"
     },
     {
-      "src": "/api/backend/groups/(?<groupId>[^/]+)/expenses",
-      "dest": "backend/api/groups/expenses/index/index.go?groupId=$groupId"
+      "src": "^/api/groups/(?<groupId>[^/]+)/settlement-batches$",
+      "dest": "backend/api/batches.go?sub=create&groupId=$groupId"
     },
     {
-      "src": "/api/backend/groups/(?<groupId>[^/]+)/settlement-batches/(?<batchId>[^/]+)",
-      "dest": "backend/api/groups/batches/detail/detail.go?groupId=$groupId&batchId=$batchId"
+      "src": "^/api/backend/groups/(?<groupId>[^/]+)/settlement-batches$",
+      "dest": "backend/api/batches.go?sub=create&groupId=$groupId"
+    },
+
+    {
+      "comment": "=== GROUPS: route dynamic cuối cùng (đứng sau tất cả các route cố định của groups) ===",
+      "src": "^/api/groups/(?<groupId>[^/]+)$",
+      "dest": "backend/api/groups.go?sub=detail&groupId=$groupId"
     },
     {
-      "src": "/api/backend/groups/(?<groupId>[^/]+)/settlement-batches",
-      "dest": "backend/api/groups/batches/index/index.go?groupId=$groupId"
+      "src": "^/api/backend/groups/(?<groupId>[^/]+)$",
+      "dest": "backend/api/groups.go?sub=detail&groupId=$groupId"
     },
     {
-      "src": "/api/backend/groups/(?<groupId>[^/]+)",
-      "dest": "backend/api/groups/detail/detail.go?groupId=$groupId"
+      "src": "^/api/groups$",
+      "dest": "backend/api/groups.go?sub=create"
     },
     {
-      "src": "/api/backend/groups",
-      "dest": "backend/api/groups/index/index.go"
+      "src": "^/api/backend/groups$",
+      "dest": "backend/api/groups.go?sub=create"
     },
+
     {
-      "src": "/api/backend/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)",
-      "dest": "backend/api/settlements/action/action.go?settlementId=$settlementId&action=$action"
-    },
-    {
-      "src": "/api/backend/webhooks/(?<provider>sepay|payos|momo)",
-      "dest": "backend/api/webhooks/webhooks.go?provider=$provider"
-    },
-    {
+      "comment": "=== FRONTEND fallback ===",
       "src": "/(.*)",
       "dest": "/$1"
     }
