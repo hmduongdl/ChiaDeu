@@ -167,3 +167,5 @@ branch:
 - Sử dụng `lucide-react` cho icons avatar trong animation thay vì font Material.
 - Animation lặp chu kỳ hiển thị tổng tiền và 4 avatar kèm số tiền chia nhỏ (type: "spring").
 - Hỗ trợ chế độ `prefers-reduced-motion` giúp tắt animation và hiện card tĩnh cho người dùng có tuỳ chọn này.
+- Bổ sung các file SVG icon bị thiếu vào thư mục `frontend/public/icons/` (như `person.svg`, `eye.svg`, `google.svg`,...) để fix lỗi vỡ icon trên các trang Auth (Login, Register, Forgot Password).
+- Sử dụng chuẩn SVG path cơ bản, tương thích với component `FigmaIcon` (hiện đang dùng thẻ `<img>`).
