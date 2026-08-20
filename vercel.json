@@ -36,7 +36,6 @@
   ],
   "routes": [
     {
-      "comment": "=== HEALTH (không có param động) ===",
       "src": "^/api/health$",
       "dest": "backend/api/health.go"
     },
@@ -46,7 +45,6 @@
     },
 
     {
-      "comment": "=== AUTH (sub = register|login|refresh|logout|me) ===",
       "src": "^/api/auth/register$",
       "dest": "backend/api/auth.go?sub=register"
     },
@@ -88,7 +86,6 @@
     },
 
     {
-      "comment": "=== SETTLEMENTS (sub cố định trước groupId dynamic) ===",
       "src": "^/api/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)$",
       "dest": "backend/api/settlements.go?settlementId=$settlementId&action=$action"
     },
@@ -98,7 +95,6 @@
     },
 
     {
-      "comment": "=== WEBHOOKS ===",
       "src": "^/api/webhooks/(?<provider>sepay|payos|momo)$",
       "dest": "backend/api/webhooks.go?provider=$provider"
     },
@@ -108,7 +104,6 @@
     },
 
     {
-      "comment": "=== GROUPS: route nhiều segment cố định đứng trước route dynamic ===",
       "src": "^/api/groups/join/(?<shareCode>[^/]+)$",
       "dest": "backend/api/groups.go?sub=join&shareCode=$shareCode"
     },
@@ -126,7 +121,6 @@
     },
 
     {
-      "comment": "=== EXPENSES ===",
       "src": "^/api/groups/(?<groupId>[^/]+)/expenses/(?<expenseId>[^/]+)$",
       "dest": "backend/api/expenses.go?sub=update&groupId=$groupId&expenseId=$expenseId"
     },
@@ -144,7 +138,6 @@
     },
 
     {
-      "comment": "=== BATCHES ===",
       "src": "^/api/groups/(?<groupId>[^/]+)/settlement-batches/(?<batchId>[^/]+)$",
       "dest": "backend/api/batches.go?sub=detail&groupId=$groupId&batchId=$batchId"
     },
@@ -162,7 +155,6 @@
     },
 
     {
-      "comment": "=== GROUPS: route dynamic cuối cùng (đứng sau tất cả các route cố định của groups) ===",
       "src": "^/api/groups/(?<groupId>[^/]+)$",
       "dest": "backend/api/groups.go?sub=detail&groupId=$groupId"
     },
@@ -180,7 +172,6 @@
     },
 
     {
-      "comment": "=== FRONTEND fallback ===",
       "src": "/(.*)",
       "dest": "/$1"
     }
