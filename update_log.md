@@ -110,3 +110,17 @@ branch:
 - Tệp/dir thay đổi chính: Không sửa code, chỉ tạo log và giải thích trên chat.
 - Kiểm tra: Không yêu cầu build code.
 - Giới hạn/theo dõi: Thuật toán SimplifyDebts hiện tại giải quyết bài toán theo hướng xác định (deterministic) O(N log N) để tối thiểu hóa số giao dịch cục bộ, không phải thuật toán tìm số giao dịch tuyệt đối nhỏ nhất (NP-Hard).
+
+## 2026-08-20 — Cập nhật SplitEqual đảm bảo tính xác định
+
+- Cập nhật thuật toán `SplitEqual` trong `services/expense_calc.go` để luôn sort `memberIDs` (theo chuẩn từ điển) trước khi phân bổ phần dư (số lẻ). Điều này giải quyết rủi ro kết quả chia bị thay đổi nếu thứ tự query mảng user từ DB trả về khác nhau giữa các lần chạy, đảm bảo hoàn toàn tính xác định (deterministic) cho thuật toán chia số lẻ. 
+- Tệp/dir thay đổi chính: `backend/services/expense_calc.go`
+- Kiểm tra: `go test ./...` chạy thành công toàn bộ bài test ở backend.
+- Giới hạn/theo dõi: Không có.
+
+## 2026-08-20 — Tối ưu zero-allocation cho SplitEqual
+
+- Áp dụng thuật toán sắp xếp in-place trực tiếp trên mảng kết quả `splits` thay vì tạo mảng copy `memberIDs` mới để sort. Việc này giúp khử hoàn toàn chi phí khởi tạo memory (Zero Extra Allocation - O(1) bộ nhớ phụ) trong khi vẫn giữ độ phức tạp thời gian O(N log N) cho việc chia phần dư của hàm `SplitEqual`.
+- Tệp/dir thay đổi chính: `backend/services/expense_calc.go`
+- Kiểm tra: `go test ./...` đạt 100% (pass xanh).
+- Giới hạn/theo dõi: Không có.

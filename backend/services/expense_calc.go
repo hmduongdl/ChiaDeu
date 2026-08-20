@@ -4,6 +4,7 @@ package services
 
 import (
 	"errors"
+	"sort"
 
 	"github.com/hmduongdl/ChiaDeu/models"
 )
@@ -51,9 +52,10 @@ func SumSplits(splits []models.ExpenseSplit) int64 {
 	return total
 }
 
-// SplitEqual chia đều amountMinor cho memberIDs theo thứ tự truyền vào. Phần dư
-// được phân bổ ổn định: mỗi thành viên đầu danh sách nhận thêm 1 đơn vị cho tới
-// khi hết phần dư, nên cùng input luôn cho cùng output và tổng luôn bằng amount.
+// SplitEqual chia đều amountMinor cho memberIDs. Để đảm bảo tính xác định
+// (deterministic), mảng kết quả sẽ được sắp xếp theo UserID trước khi phân 
+// bổ phần dư. Những người có UserID nhỏ nhất sẽ được cộng thêm 1 đơn vị.
+// Thuật toán tối ưu zero-allocation: sử dụng chính mảng kết quả để sort in-place.
 func SplitEqual(amountMinor int64, memberIDs []string) ([]models.ExpenseSplit, error) {
 	if amountMinor <= 0 {
 		return nil, ErrInvalidAmount
@@ -67,13 +69,20 @@ func SplitEqual(amountMinor int64, memberIDs []string) ([]models.ExpenseSplit, e
 	remainder := int(amountMinor % count)
 
 	splits := make([]models.ExpenseSplit, len(memberIDs))
-	for index, userID := range memberIDs {
-		share := base
-		if index < remainder {
-			share++
-		}
-		splits[index] = models.ExpenseSplit{UserID: userID, ShareMinor: share}
+	for i, userID := range memberIDs {
+		splits[i] = models.ExpenseSplit{UserID: userID, ShareMinor: base}
 	}
+
+	// Sắp xếp in-place trực tiếp trên mảng kết quả để không tốn thêm bộ nhớ O(N)
+	sort.Slice(splits, func(i, j int) bool {
+		return splits[i].UserID < splits[j].UserID
+	})
+
+	// Phân bổ phần dư cho 'remainder' người đầu tiên
+	for i := 0; i < remainder; i++ {
+		splits[i].ShareMinor++
+	}
+
 	return splits, nil
 }
 

@@ -71,17 +71,24 @@ async function refreshAccessToken() {
   return refreshPromise;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
     if (response.status === 204) {
       return undefined as T;
     }
-    return response.json() as Promise<T>;
+    const body = (await response.json()) as ApiResponse<T>;
+    return body.data as T;
   }
 
   let message = "Request failed";
   try {
-    const body = (await response.json()) as { error?: string };
+    const body = (await response.json()) as ApiResponse<unknown>;
     message = body.error || message;
   } catch {
     // Keep a stable fallback for non-JSON upstream errors.
