@@ -1,9 +1,9 @@
 package services
 
 import (
+	"container/heap"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/hmduongdl/ChiaDeu/models"
 )
@@ -45,13 +45,36 @@ type userBalance struct {
 	amount int64
 }
 
+// balanceMaxHeap triển khai heap.Interface làm max-heap cho userBalance.
+type balanceMaxHeap []userBalance
+
+func (h balanceMaxHeap) Len() int { return len(h) }
+func (h balanceMaxHeap) Less(i, j int) bool {
+	if h[i].amount != h[j].amount {
+		return h[i].amount > h[j].amount // Max-heap: phần tử có số tiền lớn hơn sẽ ưu tiên trước
+	}
+	return h[i].userID < h[j].userID // Khóa phụ userID để đảm bảo kết quả luôn xác định
+}
+func (h balanceMaxHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h *balanceMaxHeap) Push(x any)   { *h = append(*h, x.(userBalance)) }
+func (h *balanceMaxHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
 // SimplifyDebts rút gọn danh sách người nợ và người cần nhận thành các giao dịch
-// hoàn tiền trực tiếp, theo thứ tự quy định trong README:
+// hoàn tiền trực tiếp bằng 2 max-heap:
 //
-//  1. Số dư dương là cần nhận, số dư âm là cần trả, bỏ số dư bằng 0.
-//  2. Sắp xếp cả hai phía theo số dư tuyệt đối giảm dần, dùng userID làm khóa phụ.
-//  3. Ghép người nợ lớn nhất với người được nhận lớn nhất, chốt bằng giá trị nhỏ
-//     hơn, lặp tới khi cả hai phía cân bằng.
+//  1. Tính số dư (balance) của mỗi người: tổng đã trả - tổng phải trả (đã tính trước khi truyền vào map).
+//  2. Đưa tất cả người có balance dương vào max-heap (chủ nợ), người có balance âm vào max-heap khác (con nợ, lấy trị tuyệt đối).
+//  3. Lặp lại: lấy phần tử lớn nhất ở mỗi heap (người nợ nhiều nhất, người được nợ nhiều nhất)
+//     → tạo giao dịch giữa 2 người này với số tiền = min(hai giá trị)
+//     → cập nhật lại balance
+//     → đẩy lại vào heap nếu còn dư.
+//  4. Dừng khi hết phần tử.
 //
 // Kết quả xác định với cùng input. Tổng input phải bằng 0.
 func SimplifyDebts(balances map[string]int64) ([]models.Settlement, error) {
@@ -63,49 +86,51 @@ func SimplifyDebts(balances map[string]int64) ([]models.Settlement, error) {
 		return nil, ErrUnbalanced
 	}
 
-	var debtors, creditors []userBalance
+	creditors := &balanceMaxHeap{}
+	debtors := &balanceMaxHeap{}
+
 	for userID, balance := range balances {
 		switch {
 		case balance > 0:
-			creditors = append(creditors, userBalance{userID: userID, amount: balance})
+			*creditors = append(*creditors, userBalance{userID: userID, amount: balance})
 		case balance < 0:
-			// Lưu trị tuyệt đối để sắp xếp chung một chiều.
-			debtors = append(debtors, userBalance{userID: userID, amount: -balance})
+			// Lấy trị tuyệt đối của số dư âm để đưa vào max-heap con nợ.
+			*debtors = append(*debtors, userBalance{userID: userID, amount: -balance})
 		}
 	}
 
-	sortByAmountDesc := func(users []userBalance) {
-		sort.Slice(users, func(i, j int) bool {
-			if users[i].amount != users[j].amount {
-				return users[i].amount > users[j].amount
-			}
-			return users[i].userID < users[j].userID
-		})
-	}
-	sortByAmountDesc(debtors)
-	sortByAmountDesc(creditors)
+	heap.Init(creditors)
+	heap.Init(debtors)
 
 	var settlements []models.Settlement
-	debtorIndex, creditorIndex := 0, 0
-	for debtorIndex < len(debtors) && creditorIndex < len(creditors) {
-		amount := min(debtors[debtorIndex].amount, creditors[creditorIndex].amount)
+	for creditors.Len() > 0 && debtors.Len() > 0 {
+		// Lấy người được nợ nhiều nhất và người nợ nhiều nhất từ 2 max-heap
+		creditor := heap.Pop(creditors).(userBalance)
+		debtor := heap.Pop(debtors).(userBalance)
+
+		amount := min(creditor.amount, debtor.amount)
 		if amount <= 0 {
 			break
 		}
+
 		settlements = append(settlements, models.Settlement{
-			FromUserID:  debtors[debtorIndex].userID,
-			ToUserID:    creditors[creditorIndex].userID,
+			FromUserID:  debtor.userID,
+			ToUserID:    creditor.userID,
 			AmountMinor: amount,
 			Status:      models.SettlementStatusPending,
 		})
-		debtors[debtorIndex].amount -= amount
-		creditors[creditorIndex].amount -= amount
-		if debtors[debtorIndex].amount == 0 {
-			debtorIndex++
+
+		creditor.amount -= amount
+		debtor.amount -= amount
+
+		// Cập nhật lại balance và đẩy lại vào heap nếu còn dư
+		if creditor.amount > 0 {
+			heap.Push(creditors, creditor)
 		}
-		if creditors[creditorIndex].amount == 0 {
-			creditorIndex++
+		if debtor.amount > 0 {
+			heap.Push(debtors, debtor)
 		}
 	}
+
 	return settlements, nil
 }

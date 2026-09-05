@@ -106,6 +106,18 @@ func (h *AppHandler) GetGroup(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"group": detail.Group, "members": detail.Members})
 }
 
+func (h *AppHandler) ListGroups(c *fiber.Ctx) error {
+	userID, ok := authmiddleware.UserID(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	groupsList, err := h.groups.ListGroups(c.UserContext(), userID)
+	if err != nil {
+		return internalError(c)
+	}
+	return c.JSON(fiber.Map{"groups": groupsList})
+}
+
 // ----------------------------------------------------------------------------
 // Khoản chi
 // ----------------------------------------------------------------------------
@@ -169,6 +181,64 @@ func (h *AppHandler) UpdateExpense(c *fiber.Ctx) error {
 		return mapExpenseError(c, err)
 	}
 	return c.JSON(fiber.Map{"expense": expense, "splits": splits})
+}
+
+func (h *AppHandler) ListExpenses(c *fiber.Ctx) error {
+	userID, ok := authmiddleware.UserID(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	groupID := c.Params("groupId")
+
+	if _, err := h.groups.GetGroup(c.UserContext(), userID, groupID); err != nil {
+		if errors.Is(err, groups.ErrNotMember) || errors.Is(err, groups.ErrGroupNotFound) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "bạn không phải là thành viên nhóm"})
+		}
+		return internalError(c)
+	}
+
+	items, err := h.expenses.ListExpenses(c.UserContext(), groupID)
+	if err != nil {
+		return internalError(c)
+	}
+	return c.JSON(fiber.Map{"expenses": items})
+}
+
+func (h *AppHandler) GetExpense(c *fiber.Ctx) error {
+	userID, ok := authmiddleware.UserID(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	groupID := c.Params("groupId")
+	expenseID := c.Params("expenseId")
+
+	if _, err := h.groups.GetGroup(c.UserContext(), userID, groupID); err != nil {
+		if errors.Is(err, groups.ErrNotMember) || errors.Is(err, groups.ErrGroupNotFound) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "bạn không phải là thành viên nhóm"})
+		}
+		return internalError(c)
+	}
+
+	detail, err := h.expenses.GetExpense(c.UserContext(), groupID, expenseID)
+	if err != nil {
+		return mapExpenseError(c, err)
+	}
+	return c.JSON(detail)
+}
+
+func (h *AppHandler) VoidExpense(c *fiber.Ctx) error {
+	userID, ok := authmiddleware.UserID(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	groupID := c.Params("groupId")
+	expenseID := c.Params("expenseId")
+
+	expense, err := h.expenses.VoidExpense(c.UserContext(), userID, groupID, expenseID)
+	if err != nil {
+		return mapExpenseError(c, err)
+	}
+	return c.JSON(fiber.Map{"expense": expense})
 }
 
 func (h *AppHandler) Balances(c *fiber.Ctx) error {
@@ -272,6 +342,31 @@ func (h *AppHandler) GetBatch(c *fiber.Ctx) error {
 	return c.JSON(snapshot)
 }
 
+func (h *AppHandler) CancelBatch(c *fiber.Ctx) error {
+	userID, ok := authmiddleware.UserID(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	batchID := c.Params("batchId")
+
+	snapshot, err := h.settlements.CancelBatch(c.UserContext(), batchID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, settlements.ErrBatchNotFound):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "kỳ quyết toán không tồn tại"})
+		case errors.Is(err, settlements.ErrNotAdmin):
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "chỉ quản trị viên mới được thực hiện thao tác này"})
+		case errors.Is(err, settlements.ErrBatchClosed):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "kỳ quyết toán không còn mở"})
+		case errors.Is(err, settlements.ErrBatchHasPaidSettlement):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "kỳ có giao dịch đã thanh toán, không thể hủy"})
+		default:
+			return internalError(c)
+		}
+	}
+	return c.JSON(snapshot)
+}
+
 func (h *AppHandler) MarkSent(c *fiber.Ctx) error {
 	return h.settleTransition(c, h.settlements.MarkSent)
 }
@@ -282,6 +377,32 @@ func (h *AppHandler) Confirm(c *fiber.Ctx) error {
 
 func (h *AppHandler) Reject(c *fiber.Ctx) error {
 	return h.settleTransition(c, h.settlements.Reject)
+}
+
+func (h *AppHandler) GetSettlement(c *fiber.Ctx) error {
+	userID, ok := authmiddleware.UserID(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	settlementID := c.Params("settlementId")
+
+	settleCtx, err := h.settlements.GetSettlement(c.UserContext(), settlementID)
+	if err != nil {
+		if errors.Is(err, settlements.ErrSettlementNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "giao dịch hoàn tiền không tồn tại"})
+		}
+		return internalError(c)
+	}
+
+	if _, err := h.groups.GetGroup(c.UserContext(), userID, settleCtx.GroupID); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "bạn không phải là thành viên nhóm"})
+	}
+
+	return c.JSON(fiber.Map{
+		"settlement":  settleCtx.Settlement,
+		"groupId":     settleCtx.GroupID,
+		"batchStatus": settleCtx.BatchStatus,
+	})
 }
 
 type settleFunc func(ctx context.Context, settlementID, actorID string) (models.Settlement, error)

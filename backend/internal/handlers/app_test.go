@@ -184,6 +184,37 @@ func (s *fakeExpenseStore) splitsFor(expenseID string) []models.ExpenseSplit {
 	return result
 }
 
+func (s *fakeExpenseStore) ListGroupExpensesWithSplits(_ context.Context, groupID string) ([]models.Expense, []models.ExpenseSplit, error) {
+	var result []models.Expense
+	var resultSplits []models.ExpenseSplit
+	for _, expense := range s.expenses {
+		if expense.GroupID == groupID {
+			result = append(result, expense)
+			resultSplits = append(resultSplits, s.splitsFor(expense.ID)...)
+		}
+	}
+	return result, resultSplits, nil
+}
+
+func (s *fakeExpenseStore) VoidExpense(_ context.Context, groupID, expenseID, actorID string) (models.Expense, error) {
+	for index := range s.expenses {
+		if s.expenses[index].ID == expenseID && s.expenses[index].GroupID == groupID {
+			if s.expenses[index].CreatedBy != actorID {
+				return models.Expense{}, expenses.ErrNotOwner
+			}
+			if s.expenses[index].Status != models.ExpenseStatusActive {
+				return models.Expense{}, expenses.ErrExpenseVoided
+			}
+			if s.expenses[index].BatchID != nil {
+				return models.Expense{}, expenses.ErrExpenseLocked
+			}
+			s.expenses[index].Status = models.ExpenseStatusVoided
+			return s.expenses[index], nil
+		}
+	}
+	return models.Expense{}, expenses.ErrExpenseNotFound
+}
+
 type fakeSettlementsStore struct {
 	batch   settlements.BatchSnapshot
 	byID    map[string]models.Settlement
@@ -298,15 +329,21 @@ func newTestApp(groupStore groups.Store, expenseStore expenses.Store, settlement
 
 	routes := api.Group("/groups", requireUser)
 	routes.Post("/", appHandler.CreateGroup)
+	routes.Get("/", appHandler.ListGroups)
 	routes.Post("/join/:shareCode", appHandler.JoinGroup)
 	routes.Get("/:groupId", appHandler.GetGroup)
+	routes.Get("/:groupId/expenses", appHandler.ListExpenses)
 	routes.Post("/:groupId/expenses", appHandler.CreateExpense)
+	routes.Get("/:groupId/expenses/:expenseId", appHandler.GetExpense)
 	routes.Patch("/:groupId/expenses/:expenseId", appHandler.UpdateExpense)
+	routes.Post("/:groupId/expenses/:expenseId/void", appHandler.VoidExpense)
 	routes.Get("/:groupId/balances", appHandler.Balances)
 	routes.Post("/:groupId/settlement-batches", appHandler.CloseBatch)
 	routes.Get("/:groupId/settlement-batches/:batchId", appHandler.GetBatch)
+	routes.Post("/:groupId/settlement-batches/:batchId/cancel", appHandler.CancelBatch)
 
 	settlementRoutes := api.Group("/settlements", requireUser)
+	settlementRoutes.Get("/:settlementId", appHandler.GetSettlement)
 	settlementRoutes.Post("/:settlementId/mark-sent", appHandler.MarkSent)
 	settlementRoutes.Post("/:settlementId/confirm", appHandler.Confirm)
 	settlementRoutes.Post("/:settlementId/reject", appHandler.Reject)
@@ -453,5 +490,159 @@ func TestProtectedRoutesRejectAnonymous(t *testing.T) {
 	response, _ := doRequest(t, app, http.MethodGet, "/api/groups/group-1", "", "")
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("mong đợi 401 khi chưa xác thực, got %d", response.StatusCode)
+	}
+}
+
+func TestListUserGroups(t *testing.T) {
+	groupStore := newFakeGroupStore()
+	app := newTestApp(groupStore, newFakeExpenseStore(), newFakeSettlementsStore())
+
+	// Alice tạo nhóm
+	response, payload := doRequest(t, app, http.MethodPost, "/api/groups", "alice", `{"name":"Nhóm du lịch"}`)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create group: status=%d body=%v", response.StatusCode, payload)
+	}
+
+	// Alice lấy danh sách nhóm của mình
+	response, payload = doRequest(t, app, http.MethodGet, "/api/groups", "alice", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("list groups alice: status=%d body=%v", response.StatusCode, payload)
+	}
+	groupsList, ok := payload["groups"].([]any)
+	if !ok || len(groupsList) != 1 {
+		t.Fatalf("mong đợi 1 nhóm cho alice, got %v", payload)
+	}
+
+	// Bob chưa tham gia nhóm nào → trả mảng rỗng
+	response, payload = doRequest(t, app, http.MethodGet, "/api/groups", "bob", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("list groups bob: status=%d body=%v", response.StatusCode, payload)
+	}
+	groupsList, ok = payload["groups"].([]any)
+	if !ok || len(groupsList) != 0 {
+		t.Fatalf("mong đợi 0 nhóm cho bob, got %v", payload)
+	}
+}
+
+func TestListAndGetExpensesAndVoid(t *testing.T) {
+	groupStore := newFakeGroupStore()
+	expenseStore := newFakeExpenseStore()
+	app := newTestApp(groupStore, expenseStore, newFakeSettlementsStore())
+
+	// Tạo nhóm và bob tham gia
+	response, payload := doRequest(t, app, http.MethodPost, "/api/groups", "alice", `{"name":"Nhóm xem phim"}`)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create group: status=%d", response.StatusCode)
+	}
+	group := payload["group"].(map[string]any)
+	groupID := group["id"].(string)
+	shareCode := group["shareCode"].(string)
+
+	doRequest(t, app, http.MethodPost, "/api/groups/join/"+shareCode, "bob", "")
+
+	// Tạo khoản chi
+	expenseBody := `{"paidBy":"alice","description":"Vé xem phim","amountMinor":80000,"splitType":"EQUAL","splits":[{"userId":"alice","shareMinor":40000},{"userId":"bob","shareMinor":40000}]}`
+	response, payload = doRequest(t, app, http.MethodPost, "/api/groups/"+groupID+"/expenses", "alice", expenseBody)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create expense: status=%d body=%v", response.StatusCode, payload)
+	}
+	expenseID := payload["expense"].(map[string]any)["id"].(string)
+
+	// Lấy danh sách khoản chi của nhóm
+	response, payload = doRequest(t, app, http.MethodGet, "/api/groups/"+groupID+"/expenses", "bob", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("list expenses: status=%d body=%v", response.StatusCode, payload)
+	}
+	expensesList := payload["expenses"].([]any)
+	if len(expensesList) != 1 {
+		t.Fatalf("mong đợi 1 khoản chi, got %d", len(expensesList))
+	}
+	item := expensesList[0].(map[string]any)
+	splits := item["splits"].([]any)
+	if len(splits) != 2 {
+		t.Fatalf("mong đợi 2 phần chia, got %d", len(splits))
+	}
+
+	// Lấy chi tiết một khoản chi
+	response, payload = doRequest(t, app, http.MethodGet, "/api/groups/"+groupID+"/expenses/"+expenseID, "bob", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("get expense: status=%d body=%v", response.StatusCode, payload)
+	}
+	if payload["expense"].(map[string]any)["id"] != expenseID {
+		t.Fatalf("mong đợi id khoản chi %s, got %v", expenseID, payload)
+	}
+
+	// Bob không phải người tạo → không được phép hủy khoản chi
+	response, _ = doRequest(t, app, http.MethodPost, "/api/groups/"+groupID+"/expenses/"+expenseID+"/void", "bob", "")
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("void by non-owner: mong đợi 403, got %d", response.StatusCode)
+	}
+
+	// Alice là người tạo → hủy thành công
+	response, payload = doRequest(t, app, http.MethodPost, "/api/groups/"+groupID+"/expenses/"+expenseID+"/void", "alice", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("void by owner: status=%d body=%v", response.StatusCode, payload)
+	}
+	if payload["expense"].(map[string]any)["status"] != "VOIDED" {
+		t.Fatalf("trạng thái sau void phải là VOIDED, got %v", payload["expense"])
+	}
+
+	// Hủy lần nữa phải trả 409 Conflict
+	response, _ = doRequest(t, app, http.MethodPost, "/api/groups/"+groupID+"/expenses/"+expenseID+"/void", "alice", "")
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("void already voided: mong đợi 409, got %d", response.StatusCode)
+	}
+}
+
+func TestCancelBatch(t *testing.T) {
+	groupStore := newFakeGroupStore()
+	settlementStore := newFakeSettlementsStore()
+	app := newTestApp(groupStore, newFakeExpenseStore(), settlementStore)
+
+	// Alice tạo nhóm
+	doRequest(t, app, http.MethodPost, "/api/groups", "alice", `{"name":"Nhóm tất toán"}`)
+
+	// Hủy kỳ quyết toán
+	response, payload := doRequest(t, app, http.MethodPost, "/api/groups/group-1/settlement-batches/batch-1/cancel", "alice", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("cancel batch: status=%d body=%v", response.StatusCode, payload)
+	}
+	if payload["batch"] == nil {
+		t.Fatalf("mong đợi batch snapshot trong kết quả, got %v", payload)
+	}
+}
+
+func TestGetSettlement(t *testing.T) {
+	groupStore := newFakeGroupStore()
+	settlementStore := newFakeSettlementsStore()
+	settlementStore.byID["settlement-1"] = models.Settlement{
+		ID: "settlement-1", BatchID: "batch-1", FromUserID: "bob", ToUserID: "alice",
+		AmountMinor: 5000, PaymentCode: "ABC123", Status: models.SettlementStatusPending, CreatedAt: time.Now(),
+	}
+	app := newTestApp(groupStore, newFakeExpenseStore(), settlementStore)
+
+	// Tạo nhóm cho alice
+	doRequest(t, app, http.MethodPost, "/api/groups", "alice", `{"name":"Nhóm hoàn tiền"}`)
+
+	// Alice (thành viên nhóm) lấy chi tiết giao dịch
+	response, payload := doRequest(t, app, http.MethodGet, "/api/settlements/settlement-1", "alice", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("get settlement: status=%d body=%v", response.StatusCode, payload)
+	}
+	settleData := payload["settlement"].(map[string]any)
+	if settleData["id"] != "settlement-1" {
+		t.Fatalf("mong đợi settlement-1, got %v", settleData)
+	}
+
+	// Charlie (không thuộc nhóm) lấy chi tiết giao dịch → 403 Forbidden
+	response, _ = doRequest(t, app, http.MethodGet, "/api/settlements/settlement-1", "charlie", "")
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("get settlement non-member: mong đợi 403, got %d", response.StatusCode)
+	}
+
+	// Settlement không tồn tại → 404 Not Found
+	response, _ = doRequest(t, app, http.MethodGet, "/api/settlements/nonexistent", "alice", "")
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("get settlement nonexistent: mong đợi 404, got %d", response.StatusCode)
 	}
 }
