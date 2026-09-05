@@ -105,3 +105,21 @@ func assertSettlements(t *testing.T, got, want []models.Settlement) {
 		t.Fatalf("settlements = %+v, mong đợi %+v", got, want)
 	}
 }
+
+func TestSimplifyDebtsMaxHeapReorder(t *testing.T) {
+	// A:+100, B:+50, C:-80, D:-70
+	// B1: C(80) trả A(100) 80 -> A còn 20, C hết
+	// Heap chủ nợ: B(50) > A(20), con nợ: D(70)
+	// B2: D(70) trả B(50) 50 -> B hết, D còn 20
+	// B3: D(20) trả A(20) 20 -> Cả hai hết
+	settlements, err := SimplifyDebts(map[string]int64{"a": 100, "b": 50, "c": -80, "d": -70})
+	if err != nil {
+		t.Fatalf("simplify debts: %v", err)
+	}
+	expected := []models.Settlement{
+		{FromUserID: "c", ToUserID: "a", AmountMinor: 80, Status: models.SettlementStatusPending},
+		{FromUserID: "d", ToUserID: "b", AmountMinor: 50, Status: models.SettlementStatusPending},
+		{FromUserID: "d", ToUserID: "a", AmountMinor: 20, Status: models.SettlementStatusPending},
+	}
+	assertSettlements(t, settlements, expected)
+}

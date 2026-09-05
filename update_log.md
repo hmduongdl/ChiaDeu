@@ -1,5 +1,29 @@
 # Update log
 
+## 2026-09-05 — Backend: hoàn thiện toàn diện API nhóm, khoản chi, quyết toán và tinh gọn webhook
+
+- **Nhóm (Groups):** Bổ sung endpoint `GET /api/groups` cho phép người dùng lấy danh sách tất cả các nhóm mình đang tham gia.
+- **Khoản chi (Expenses):**
+  - Mở rộng `expenses.Store` và `expenses.Service` với `ListGroupExpensesWithSplits`, `GetExpense`, `ListExpenses`, và `VoidExpense`.
+  - Bổ sung `GET /api/groups/:groupId/expenses` để lấy toàn bộ khoản chi kèm phần chia chi tiết của nhóm.
+  - Bổ sung `GET /api/groups/:groupId/expenses/:expenseId` để lấy chi tiết một khoản chi cụ thể.
+  - Bổ sung `POST /api/groups/:groupId/expenses/:expenseId/void` cho phép người tạo hủy khoản chi chưa chốt (chuyển trạng thái `ACTIVE → VOIDED`, ghi audit log).
+- **Quyết toán (Settlements):**
+  - Bổ sung `POST /api/groups/:groupId/settlement-batches/:batchId/cancel` cho phép quản trị viên hủy kỳ quyết toán khi chưa có giao dịch nào hoàn tất (`PAID`), hoàn lại các khoản chi về trạng thái chưa chốt.
+  - Bổ sung `GET /api/settlements/:settlementId` để lấy chi tiết một giao dịch hoàn tiền (yêu cầu là thành viên của nhóm liên quan).
+  - Thêm JSON tags (`batch`, `settlements`, `expenses`) cho struct `BatchSnapshot` để đảm bảo định dạng JSON camelCase đồng nhất trên toàn bộ API.
+- **Giải thuật rút gọn công nợ (Max-Heap):**
+  - Tái cấu trúc `SimplifyDebts` trong `backend/services/settlement_calc.go` sử dụng 2 Max-Heap (`container/heap`):
+    1. Tính số dư ròng của mỗi người (`balance = tổng đã trả - tổng phải trả`).
+    2. Đưa người có số dư dương vào max-heap chủ nợ (`creditors`), người có số dư âm vào max-heap con nợ (`debtors`, lấy trị tuyệt đối).
+    3. Lặp lại: lấy phần tử lớn nhất ở mỗi heap (`người nợ nhiều nhất, người được nợ nhiều nhất`) → tạo giao dịch với `amount = min(hai giá trị)` → cập nhật lại số dư và đẩy lại vào heap tương ứng nếu còn dư.
+    4. Dừng khi cả hai heap hết phần tử. Đảm bảo kết quả xác định nhờ so sánh khóa phụ `userID`.
+  - Bổ sung unit test `TestSimplifyDebtsMaxHeapReorder` trong `backend/services/settlement_calc_test.go`.
+- **Tinh gọn Webhook:** Loại bỏ hoàn toàn các route webhook/cổng thanh toán QR ngân hàng không dùng (`/webhooks/sepay`, `payos`, `momo`) theo yêu cầu, tập trung hoàn thiện thanh toán P2P trực tiếp.
+- **Tệp/thư mục thay đổi chính:** `backend/services/settlement_calc{_test,}.go`, `backend/internal/expenses/{store,service}.go`, `backend/internal/handlers/{app,app_test}.go`, `backend/internal/settlements/store.go`, `backend/main.go`, `README.md`, `update_log.md`.
+- **Kiểm thử:** `go test -v ./...` pass toàn bộ (bao gồm các test case cho max-heap và các API mới); `go vet ./...` đạt; `git diff --check` đạt không có lỗi thụt lề hay khoảng trắng thừa.
+- **Giới hạn/theo dõi:** Việc gọi API thật từ Frontend Next.js (thay thế mock data ở các màn hình `/dashboard`, `/groups`, `/profile`) sẽ được triển khai ở giai đoạn tiếp theo.
+
 ## 2026-08-16 — Backend: models, schema, nghiệp vụ nhóm/khoản chi/quyết toán, API
 
 Triển khai toàn bộ roadmap backend theo Chế độ chia đều linh hoạt, tách theo feature

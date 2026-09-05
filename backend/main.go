@@ -3,7 +3,7 @@
 //   - Nạp cấu hình từ biến môi trường
 //   - Kết nối database PostgreSQL
 //   - Khởi tạo JWT token manager và auth service
-//   - Đăng ký các route API (health, auth, nghiệp vụ, webhook)
+//   - Đăng ký các route API (health, auth, nghiệp vụ)
 //   - Cấu hình CORS và logging middleware
 package main
 
@@ -106,15 +106,13 @@ func newApp(dependencies appDependencies) *fiber.App {
 	if dependencies.appHandler != nil && dependencies.authMiddleware != nil {
 		registerApplicationRoutes(api, dependencies.authMiddleware, dependencies.appHandler)
 	}
-	registerWebhookRoutes(api)
 
-	// Keep the existing deployment-prefixed health/business URL while auth stays canonical at /api/auth.
+	// Giữ URL nghiệp vụ có tiền tố cũ khi triển khai, auth vẫn ở /api/auth.
 	legacyAPI := app.Group("/api/backend")
 	registerHealthRoute(legacyAPI)
 	if dependencies.appHandler != nil && dependencies.authMiddleware != nil {
 		registerApplicationRoutes(legacyAPI, dependencies.authMiddleware, dependencies.appHandler)
 	}
-	registerWebhookRoutes(legacyAPI)
 
 	return app
 }
@@ -140,26 +138,22 @@ func registerAuthRoutes(api fiber.Router, handler *handlers.AuthHandler, require
 func registerApplicationRoutes(api fiber.Router, requireAuth fiber.Handler, app *handlers.AppHandler) {
 	groupsRoutes := api.Group("/groups", requireAuth)
 	groupsRoutes.Post("/", app.CreateGroup)
+	groupsRoutes.Get("/", app.ListGroups)
 	groupsRoutes.Post("/join/:shareCode", app.JoinGroup)
 	groupsRoutes.Get("/:groupId", app.GetGroup)
+	groupsRoutes.Get("/:groupId/expenses", app.ListExpenses)
 	groupsRoutes.Post("/:groupId/expenses", app.CreateExpense)
+	groupsRoutes.Get("/:groupId/expenses/:expenseId", app.GetExpense)
 	groupsRoutes.Patch("/:groupId/expenses/:expenseId", app.UpdateExpense)
+	groupsRoutes.Post("/:groupId/expenses/:expenseId/void", app.VoidExpense)
 	groupsRoutes.Get("/:groupId/balances", app.Balances)
 	groupsRoutes.Post("/:groupId/settlement-batches", app.CloseBatch)
 	groupsRoutes.Get("/:groupId/settlement-batches/:batchId", app.GetBatch)
+	groupsRoutes.Post("/:groupId/settlement-batches/:batchId/cancel", app.CancelBatch)
 
 	settlementRoutes := api.Group("/settlements", requireAuth)
+	settlementRoutes.Get("/:settlementId", app.GetSettlement)
 	settlementRoutes.Post("/:settlementId/mark-sent", app.MarkSent)
 	settlementRoutes.Post("/:settlementId/confirm", app.Confirm)
 	settlementRoutes.Post("/:settlementId/reject", app.Reject)
-}
-
-func registerWebhookRoutes(api fiber.Router) {
-	api.Post("/webhooks/sepay", notImplemented)
-	api.Post("/webhooks/payos", notImplemented)
-	api.Post("/webhooks/momo", notImplemented)
-}
-
-func notImplemented(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"message": "not implemented"})
 }

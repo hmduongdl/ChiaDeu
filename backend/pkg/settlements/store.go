@@ -38,9 +38,9 @@ var (
 // BatchSnapshot là ảnh chụp một kỳ quyết toán cùng các settlement và khoản chi
 // thuộc kỳ.
 type BatchSnapshot struct {
-	Batch       models.SettlementBatch
-	Settlements []models.Settlement
-	Expenses    []models.Expense
+	Batch       models.SettlementBatch `json:"batch"`
+	Settlements []models.Settlement    `json:"settlements"`
+	Expenses    []models.Expense       `json:"expenses"`
 }
 
 // SettlementContext nối settlement với nhóm và trạng thái kỳ chứa nó.

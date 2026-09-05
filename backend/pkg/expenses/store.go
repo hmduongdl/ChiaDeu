@@ -27,6 +27,8 @@ type Store interface {
 	UpdateExpenseWithSplits(ctx context.Context, expense models.Expense, splits []models.ExpenseSplit) (models.Expense, error)
 	GetExpenseWithSplits(ctx context.Context, groupID, expenseID string) (models.Expense, []models.ExpenseSplit, error)
 	ListUnsettledExpensesWithSplits(ctx context.Context, groupID string) ([]models.Expense, []models.ExpenseSplit, error)
+	ListGroupExpensesWithSplits(ctx context.Context, groupID string) ([]models.Expense, []models.ExpenseSplit, error)
+	VoidExpense(ctx context.Context, groupID, expenseID, actorID string) (models.Expense, error)
 }
 
 type PostgresStore struct {
@@ -227,6 +229,101 @@ func (s *PostgresStore) ListUnsettledExpensesWithSplits(ctx context.Context, gro
 		return nil, nil, err
 	}
 	return expenses, splits, nil
+}
+
+// ListGroupExpensesWithSplits trả về toàn bộ khoản chi của nhóm cùng phần chia,
+// sắp xếp theo ngày chi giảm dần.
+func (s *PostgresStore) ListGroupExpensesWithSplits(ctx context.Context, groupID string) ([]models.Expense, []models.ExpenseSplit, error) {
+	expenseRows, err := s.pool.Query(ctx, `
+		SELECT id, group_id, created_by, paid_by, description, amount_minor, split_type,
+		       expense_date, batch_id, status, created_at, updated_at
+		FROM expenses
+		WHERE group_id = $1
+		ORDER BY expense_date DESC, created_at DESC`, groupID)
+	if err != nil {
+		return nil, nil, err
+	}
+	expenses, err := scanExpenses(expenseRows)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	splitRows, err := s.pool.Query(ctx, `
+		SELECT es.id, es.expense_id, es.user_id, es.share_minor, es.created_at
+		FROM expense_splits es
+		JOIN expenses e ON e.id = es.expense_id
+		WHERE e.group_id = $1`, groupID)
+	if err != nil {
+		return nil, nil, err
+	}
+	splits, err := scanSplits(splitRows)
+	if err != nil {
+		return nil, nil, err
+	}
+	return expenses, splits, nil
+}
+
+// VoidExpense đánh dấu hủy một khoản chi chưa chốt. Chỉ người tạo khoản chi mới
+// được phép hủy.
+func (s *PostgresStore) VoidExpense(ctx context.Context, groupID, expenseID, actorID string) (models.Expense, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Expense{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var batchID pgtype.UUID
+	var currentStatus, createdBy string
+	err = tx.QueryRow(ctx, `
+		SELECT batch_id, status, created_by
+		FROM expenses
+		WHERE id = $1 AND group_id = $2
+		FOR UPDATE`,
+		expenseID, groupID,
+	).Scan(&batchID, &currentStatus, &createdBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.Expense{}, ErrExpenseNotFound
+	}
+	if err != nil {
+		return models.Expense{}, err
+	}
+	if currentStatus != models.ExpenseStatusActive {
+		return models.Expense{}, ErrExpenseVoided
+	}
+	if batchID.Valid {
+		return models.Expense{}, ErrExpenseLocked
+	}
+	if createdBy != actorID {
+		return models.Expense{}, ErrNotOwner
+	}
+
+	expense, err := scanSingleExpense(tx.QueryRow(ctx, `
+		UPDATE expenses
+		SET status = $1, updated_at = now()
+		WHERE id = $2 AND group_id = $3
+		RETURNING id, group_id, created_by, paid_by, description, amount_minor, split_type,
+		          expense_date, batch_id, status, created_at, updated_at`,
+		models.ExpenseStatusVoided, expenseID, groupID,
+	))
+	if err != nil {
+		return models.Expense{}, err
+	}
+
+	if err := audit.Append(ctx, tx, audit.Entry{
+		GroupID:    groupID,
+		ActorID:    actorID,
+		Action:     "expense.voided",
+		EntityType: "expense",
+		EntityID:   expenseID,
+		Metadata:   map[string]any{"amountMinor": expense.AmountMinor},
+	}); err != nil {
+		return models.Expense{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.Expense{}, err
+	}
+	return expense, nil
 }
 
 // requireActiveMembers xác nhận mọi user trong danh sách đều là thành viên ACTIVE

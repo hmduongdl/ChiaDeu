@@ -74,3 +74,43 @@ func (s *Service) UnsettledBalances(ctx context.Context, groupID string) (map[st
 	}
 	return services.CalculateNetBalances(expenses, splits)
 }
+
+// ExpenseDetail chứa thông tin một khoản chi cùng danh sách các phần chia.
+type ExpenseDetail struct {
+	Expense models.Expense        `json:"expense"`
+	Splits  []models.ExpenseSplit `json:"splits"`
+}
+
+// GetExpense lấy chi tiết một khoản chi cùng phần chia theo nhóm và ID.
+func (s *Service) GetExpense(ctx context.Context, groupID, expenseID string) (ExpenseDetail, error) {
+	expense, splits, err := s.store.GetExpenseWithSplits(ctx, groupID, expenseID)
+	if err != nil {
+		return ExpenseDetail{}, err
+	}
+	return ExpenseDetail{Expense: expense, Splits: splits}, nil
+}
+
+// ListExpenses lấy toàn bộ danh sách khoản chi kèm phần chia của nhóm.
+func (s *Service) ListExpenses(ctx context.Context, groupID string) ([]ExpenseDetail, error) {
+	expensesList, splitsList, err := s.store.ListGroupExpensesWithSplits(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	splitsByExpense := make(map[string][]models.ExpenseSplit)
+	for _, split := range splitsList {
+		splitsByExpense[split.ExpenseID] = append(splitsByExpense[split.ExpenseID], split)
+	}
+	result := make([]ExpenseDetail, 0, len(expensesList))
+	for _, expense := range expensesList {
+		result = append(result, ExpenseDetail{
+			Expense: expense,
+			Splits:  splitsByExpense[expense.ID],
+		})
+	}
+	return result, nil
+}
+
+// VoidExpense hủy một khoản chi chưa chốt của nhóm.
+func (s *Service) VoidExpense(ctx context.Context, actorID, groupID, expenseID string) (models.Expense, error) {
+	return s.store.VoidExpense(ctx, groupID, expenseID, actorID)
+}

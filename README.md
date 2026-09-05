@@ -163,32 +163,29 @@ trong [`phancong.md`](phancong.md).
 |---|---|
 | `GET /api/health` | Kiểm tra API |
 | `POST /api/auth/register` | Tạo tài khoản |
-| `POST /api/auth/login` | Đăng nhập và cấp cookie |
-| `POST /api/auth/refresh` | Cấp lại access token từ refresh cookie |
-| `POST /api/auth/logout` | Xóa cookie phiên |
+| `POST /api/auth/login` | Đăng nhập và cấp cookie phiên |
+| `POST /api/auth/refresh` | Cấp lại access token và xoay vòng session |
+| `POST /api/auth/logout` | Thu hồi phiên phía server và xóa cookie |
 | `GET /api/auth/me` | Lấy người dùng hiện tại; yêu cầu access token |
-
-### Hợp đồng mục tiêu cho nghiệp vụ nhóm
-
-Các route dưới đây chưa được triển khai đầy đủ. Request tạo nhóm không nhận
-`settlement_mode`, vì toàn hệ thống dùng Chế độ chia đều linh hoạt (`MULTI_CREDITOR`).
-
-| Method & path | Chức năng |
-|---|---|
+| `GET /api/groups` | Lấy danh sách nhóm người dùng đang tham gia |
 | `POST /api/groups` | Tạo nhóm và membership `ADMIN` đầu tiên |
-| `POST /api/groups/join/:shareCode` | Tham gia nhóm |
+| `POST /api/groups/join/:shareCode` | Tham gia nhóm bằng mã chia sẻ |
 | `GET /api/groups/:id` | Lấy thông tin và thành viên nhóm |
+| `GET /api/groups/:id/expenses` | Lấy danh sách khoản chi kèm phần chia |
 | `POST /api/groups/:id/expenses` | Tạo khoản chi cùng các phần chia |
+| `GET /api/groups/:id/expenses/:expenseId` | Lấy chi tiết một khoản chi cụ thể |
 | `PATCH /api/groups/:id/expenses/:expenseId` | Sửa khoản chi chưa chốt do mình tạo |
+| `POST /api/groups/:id/expenses/:expenseId/void` | Hủy khoản chi chưa chốt do mình tạo |
 | `GET /api/groups/:id/balances` | Lấy số dư ròng chưa chốt |
 | `POST /api/groups/:id/settlement-batches` | Chốt công nợ bằng resolver của Chế độ chia đều linh hoạt |
-| `GET /api/groups/:id/settlement-batches/:batchId` | Xem snapshot và tiến độ thanh toán |
+| `GET /api/groups/:id/settlement-batches/:batchId` | Xem snapshot và tiến độ thanh toán của kỳ |
+| `POST /api/groups/:id/settlement-batches/:batchId/cancel` | Hủy kỳ quyết toán khi chưa có giao dịch thanh toán |
+| `GET /api/settlements/:id` | Xem chi tiết giao dịch hoàn tiền |
 | `POST /api/settlements/:id/mark-sent` | Người trả báo đã chuyển |
-| `POST /api/settlements/:id/confirm` | Người nhận xác nhận đã nhận |
-| `POST /api/settlements/:id/reject` | Người nhận từ chối xác nhận |
+| `POST /api/settlements/:id/confirm` | Người nhận xác nhận đã nhận (hoàn tất kỳ khi mọi khoản PAID) |
+| `POST /api/settlements/:id/reject` | Người nhận từ chối xác nhận, đưa về PENDING |
 
-Các lệnh tạo/chốt/xác nhận nên hỗ trợ idempotency key. API nghiệp vụ cũ đang có trong
-`backend/main.go` hiện chỉ trả thông báo `not implemented`.
+Các lệnh tạo/chốt/xác nhận hỗ trợ idempotency key. Mọi thay đổi trạng thái được ghi vào audit log.
 
 ## Chạy local
 
