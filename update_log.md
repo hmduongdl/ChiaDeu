@@ -1,5 +1,28 @@
 # Update log
 
+## 2026-09-05 — Cleanup payment leftovers và giảm legacy integration remnants
+
+- **Dọn dẹp môi trường/thống nhất API:** Xoá toàn bộ biến môi trường giả lập thanh toán còn sót trong `.env`, `.env.example` và `backend/.env` (SePay, PayOS, MoMo), vì dự án hiện chỉ tập trung vào chia tiền P2P và không dùng cổng thanh toán bên ngoài.
+- **Dọn dẹp schema cũ:** Giảm các field/table cũ liên quan bank/webhook trong `backend/migrations/001_init.sql` (bỏ `sepay_account_id`, bảng `bank_transactions`, `source_transaction_id`, `confirmed_transaction_id`, `payment_method`, `qr_code_data`) để không còn giữ lại legacy payment integration.
+- **Tệp/thư mục thay đổi chính:** `.env`, `.env.example`, `backend/.env`, `backend/migrations/001_init.sql`, `update_log.md`.
+- **Kiểm thử:** `cd /mnt/Work/ChiaDeu/backend && go test ./...` chạy thành công.
+- **Giới hạn/theo dõi:** Nếu dự án có nhu cầu tích hợp thanh toán sau này, nên bổ sung lại theo một module riêng và không tích hợp tạm vào schema gốc.
+
+## 2026-09-05 — Cleanup API: xoá route webhook không còn sử dụng
+
+- **API cleanup:** Bỏ toàn bộ route và build entry cho webhook khỏi [vercel.json](vercel.json); xoá file handler webhook tương ứng khỏi API, vì dự án hiện không còn dùng SePay/PayOS/MoMo.
+- **Tệp/thư mục thay đổi chính:** [vercel.json](vercel.json), `backend/api/` (xóa handler webhook), `update_log.md`.
+- **Kiểm thử:** `cd /mnt/Work/ChiaDeu/backend && go test ./...` chạy thành công.
+- **Giới hạn/theo dõi:** Không còn route webhooks trong API; nếu cần tích hợp thanh toán sau này thì sẽ thêm lại theo tiến độ riêng biệt.
+
+## 2026-09-05 — Fix webhook provider routing và xác minh backend sau merge nhánh feature/service
+
+- **Webhook:** Cập nhật `backend/api/webhooks.go` để nhận provider từ cả query string (`?provider=...`) và đường dẫn trực tiếp (`/api/webhooks/sepay`), giúp route thực tế và unit test nhất quán hơn khi chạy local hoặc qua Vercel route mapping.
+- **Test:** Thêm `backend/api/webhooks_test.go` để kiểm tra route provider hợp lệ trả `200` và provider không hợp lệ trả `404`.
+- **Tệp/thư mục thay đổi chính:** `backend/api/webhooks.go`, `backend/api/webhooks_test.go`, `update_log.md`.
+- **Kiểm thử:** `cd /mnt/Work/ChiaDeu/backend && go test ./...` chạy thành công; toàn bộ backend test pass.
+- **Giới hạn/theo dõi:** Webhook chưa triển khai logic nghiệp vụ thật cho SePay/PayOS/MoMo, chỉ xác nhận route chấp nhận và giữ cấu trúc JSON chuẩn để tích hợp sau này.
+
 ## 2026-09-05 — Backend: hoàn thiện toàn diện API nhóm, khoản chi, quyết toán và tinh gọn webhook
 
 - **Nhóm (Groups):** Bổ sung endpoint `GET /api/groups` cho phép người dùng lấy danh sách tất cả các nhóm mình đang tham gia.

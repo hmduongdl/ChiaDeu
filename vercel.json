@@ -28,10 +28,6 @@
     {
       "src": "backend/api/settlements.go",
       "use": "@vercel/go"
-    },
-    {
-      "src": "backend/api/webhooks.go",
-      "use": "@vercel/go"
     }
   ],
   "routes": [
@@ -43,7 +39,6 @@
       "src": "^/api/backend/health$",
       "dest": "backend/api/health.go"
     },
-
     {
       "src": "^/api/auth/register$",
       "dest": "backend/api/auth.go?sub=register"
@@ -84,7 +79,6 @@
       "src": "^/api/backend/auth/me$",
       "dest": "backend/api/auth.go?sub=me"
     },
-
     {
       "src": "^/api/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)$",
       "dest": "backend/api/settlements.go?settlementId=$settlementId&action=$action"
@@ -93,16 +87,6 @@
       "src": "^/api/backend/settlements/(?<settlementId>[^/]+)/(?<action>mark-sent|confirm|reject)$",
       "dest": "backend/api/settlements.go?settlementId=$settlementId&action=$action"
     },
-
-    {
-      "src": "^/api/webhooks/(?<provider>sepay|payos|momo)$",
-      "dest": "backend/api/webhooks.go?provider=$provider"
-    },
-    {
-      "src": "^/api/backend/webhooks/(?<provider>sepay|payos|momo)$",
-      "dest": "backend/api/webhooks.go?provider=$provider"
-    },
-
     {
       "src": "^/api/groups/join/(?<shareCode>[^/]+)$",
       "dest": "backend/api/groups.go?sub=join&shareCode=$shareCode"
@@ -119,7 +103,6 @@
       "src": "^/api/backend/groups/(?<groupId>[^/]+)/balances$",
       "dest": "backend/api/groups.go?sub=balances&groupId=$groupId"
     },
-
     {
       "src": "^/api/groups/(?<groupId>[^/]+)/expenses/(?<expenseId>[^/]+)$",
       "dest": "backend/api/expenses.go?sub=update&groupId=$groupId&expenseId=$expenseId"
@@ -136,7 +119,6 @@
       "src": "^/api/backend/groups/(?<groupId>[^/]+)/expenses$",
       "dest": "backend/api/expenses.go?sub=create&groupId=$groupId"
     },
-
     {
       "src": "^/api/groups/(?<groupId>[^/]+)/settlement-batches/(?<batchId>[^/]+)$",
       "dest": "backend/api/batches.go?sub=detail&groupId=$groupId&batchId=$batchId"
@@ -153,7 +135,6 @@
       "src": "^/api/backend/groups/(?<groupId>[^/]+)/settlement-batches$",
       "dest": "backend/api/batches.go?sub=create&groupId=$groupId"
     },
-
     {
       "src": "^/api/groups/(?<groupId>[^/]+)$",
       "dest": "backend/api/groups.go?sub=detail&groupId=$groupId"
@@ -170,7 +151,6 @@
       "src": "^/api/backend/groups$",
       "dest": "backend/api/groups.go?sub=create"
     },
-
     {
       "src": "/(.*)",
       "dest": "/frontend/$1"
