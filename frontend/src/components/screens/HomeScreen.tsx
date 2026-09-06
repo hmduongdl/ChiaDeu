@@ -8,13 +8,17 @@
 // Dữ liệu hiện tại là mock data, sẽ thay bằng API call sau.
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import AvatarStack from "@/components/app/AvatarStack";
 import { useAuthStore } from "@/stores/auth-store";
+import { apiFetch } from "@/lib/api-client";
+import { Group } from "@/types/api";
 
 const HOME_ASSET = "/figma/home";
 
 type HomeGroup = {
+  id?: string;
   name: string;
   icon: string;
   iconBackground: string;
@@ -24,7 +28,7 @@ type HomeGroup = {
   statusClassName: string;
 };
 
-const groups: readonly HomeGroup[] = [
+const mockGroups: readonly HomeGroup[] = [
   {
     name: "Chuyến đi Đà Lạt",
     icon: `${HOME_ASSET}/imgSvg3.svg`,
@@ -63,6 +67,32 @@ const groups: readonly HomeGroup[] = [
 export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
   const displayName = user?.name?.trim() || "bạn";
+  const [apiGroups, setApiGroups] = useState<HomeGroup[]>([]);
+
+  useEffect(() => {
+    async function loadGroups() {
+      try {
+        const res = await apiFetch<{ groups: Group[] }>("/groups");
+        if (res && res.groups && res.groups.length > 0) {
+          const mapped: HomeGroup[] = res.groups.map((g, idx) => ({
+            id: g.id,
+            name: g.name,
+            icon: `${HOME_ASSET}/imgSvg${(idx % 3) + 3}.svg`,
+            iconBackground: "from-[#e0e7ff] to-[#c7d2fe]",
+            avatars: [`${HOME_ASSET}/imgMember.png`],
+            status: `Mã: ${g.shareCode}`,
+            statusClassName: "bg-[#ecfdf5] text-[#047857]",
+          }));
+          setApiGroups(mapped);
+        }
+      } catch {
+        // Giữ mock groups
+      }
+    }
+    loadGroups();
+  }, []);
+
+  const displayGroups = apiGroups.length > 0 ? apiGroups : mockGroups;
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[390px] bg-[#f9fafb] pb-32 text-[#151c27] shadow-[0_0_30px_rgba(15,23,42,0.04)]">
@@ -129,9 +159,9 @@ export default function HomeScreen() {
           </div>
 
           <div className="mt-4 space-y-3">
-            {groups.map((group) => (
+            {displayGroups.map((group) => (
               <Link
-                key={group.name}
+                key={group.id || group.name}
                 href="/groups"
                 className="flex min-h-[84px] items-center gap-4 rounded-2xl bg-white p-4 shadow-[0_3px_12px_rgba(15,23,42,0.06)] transition-transform active:scale-[0.99]"
               >

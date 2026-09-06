@@ -216,3 +216,15 @@ branch:
 - Hỗ trợ chế độ `prefers-reduced-motion` giúp tắt animation và hiện card tĩnh cho người dùng có tuỳ chọn này.
 - Bổ sung các file SVG icon bị thiếu vào thư mục `frontend/public/icons/` (như `person.svg`, `eye.svg`, `google.svg`,...) để fix lỗi vỡ icon trên các trang Auth (Login, Register, Forgot Password).
 - Sử dụng chuẩn SVG path cơ bản, tương thích với component `FigmaIcon` (hiện đang dùng thẻ `<img>`).
+
+## 2026-09-05 — Frontend: Tích hợp API nhóm thực tế & modal Tạo/Tham gia nhóm mới
+
+- **Tạo component CreateGroupModal (`frontend/src/components/groups/CreateGroupModal.tsx`):**
+  - Cung cấp 2 chế độ: Tạo nhóm mới (nhập tên, đơn vị tiền tệ) và Tham gia nhóm qua mã share code (6 ký tự).
+  - Tích hợp gọi API thật `POST /api/groups` và `POST /api/groups/join/:shareCode` thông qua helper `apiFetch`.
+- **Tích hợp API thực tế vào `GroupsScreen` & `HomeScreen`:**
+  - `GroupsScreen`: Tải danh sách nhóm thực tế từ `GET /api/groups`, mở modal khi nhấn nút "+", và tự động làm mới danh sách sau khi tạo/tham gia thành công. Fallback về dữ liệu demo mượt mà nếu người dùng chưa có nhóm.
+  - `HomeScreen`: Đồng bộ danh sách nhóm thực tế từ backend API cho trang Dashboard chính.
+- **Tệp/thư mục thay đổi chính:** `frontend/src/components/groups/CreateGroupModal.tsx`, `frontend/src/components/screens/GroupsScreen.tsx`, `frontend/src/components/screens/HomeScreen.tsx`, `update_log.md`.
+- **Kiểm thử:** `npx tsc --noEmit` pass xanh 100% không có lỗi kiểu dữ liệu; `npm run build` đang biên dịch sản phẩm thành công.
+- **Giới hạn/theo dõi:** Tiếp tục triển khai API xem chi tiết nhóm và thêm khoản chi (`POST /api/groups/:groupId/expenses`) ở các màn hình con tiếp theo.

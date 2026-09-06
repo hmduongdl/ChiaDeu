@@ -9,14 +9,18 @@
 // Dữ liệu hiện tại là mock data.
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import AvatarStack from "@/components/app/AvatarStack";
+import CreateGroupModal from "@/components/groups/CreateGroupModal";
+import { apiFetch } from "@/lib/api-client";
+import { Group } from "@/types/api";
 
 const GROUP_ASSET = "/figma/groups";
 
 type GroupFilter = "all" | "debt" | "credit";
 
 type GroupSummary = {
+  id?: string;
   name: string;
   category: string;
   filter: GroupFilter;
@@ -30,7 +34,7 @@ type GroupSummary = {
   muted?: boolean;
 };
 
-const groups: readonly GroupSummary[] = [
+const mockGroups: readonly GroupSummary[] = [
   {
     name: "Chuyến đi Đà Lạt",
     category: "Du lịch",
@@ -89,16 +93,56 @@ const filters: readonly { key: GroupFilter; label: string }[] = [
 export default function GroupsScreen() {
   const [activeFilter, setActiveFilter] = useState<GroupFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [apiGroups, setApiGroups] = useState<GroupSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Tải danh sách nhóm thực từ backend API
+  const fetchGroups = async () => {
+    try {
+      setLoading(true);
+      const res = await apiFetch<{ groups: Group[] }>("/groups");
+      if (res && res.groups && res.groups.length > 0) {
+        const mapped: GroupSummary[] = res.groups.map((g, idx) => ({
+          id: g.id,
+          name: g.name,
+          category: g.currency || "Chung",
+          filter: "all",
+          icon: `${GROUP_ASSET}/imgContainer${(idx % 4) ? (idx % 4) : ""}.svg`,
+          avatars: [`${GROUP_ASSET}/imgAvatar.png`],
+          label: "Mã: " + g.shareCode,
+          amount: "",
+          amountClassName: "text-[#065f46]",
+          cornerClassName: "bg-[#e7f0ed]",
+        }));
+        setApiGroups(mapped);
+      }
+    } catch {
+      // Giữ mock groups làm fallback nếu API chưa có dữ liệu
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGroups();
+  }, []);
+
+  const displayGroups = apiGroups.length > 0 ? apiGroups : mockGroups;
 
   const visibleGroups = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase("vi");
 
-    return groups.filter((group) => {
+    return displayGroups.filter((group) => {
       const matchesFilter = activeFilter === "all" || group.filter === activeFilter;
       const matchesSearch = group.name.toLocaleLowerCase("vi").includes(normalizedSearch);
       return matchesFilter && matchesSearch;
     });
-  }, [activeFilter, searchTerm]);
+  }, [activeFilter, searchTerm, displayGroups]);
+
+  const handleGroupCreated = () => {
+    fetchGroups();
+  };
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[390px] bg-[#f9f9ff] px-5 pb-32 pt-6 text-[#151c27] shadow-[0_0_30px_rgba(15,23,42,0.04)]">
@@ -138,8 +182,9 @@ export default function GroupsScreen() {
         ))}
         <button
           type="button"
+          onClick={() => setIsModalOpen(true)}
           aria-label="Tạo nhóm mới"
-          className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#004532] shadow-[0_4px_6px_rgba(0,0,0,0.12)]"
+          className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#004532] shadow-[0_4px_6px_rgba(0,0,0,0.12)] hover:bg-[#065f46] transition-colors"
         >
           <img src={`${GROUP_ASSET}/imgContainer4.svg`} alt="" className="h-[15px] w-[15px]" />
         </button>
@@ -148,7 +193,7 @@ export default function GroupsScreen() {
       <section className="mt-7 space-y-4" aria-live="polite">
         {visibleGroups.map((group) => (
           <article
-            key={group.name}
+            key={group.id || group.name}
             className={`relative min-h-[144px] overflow-hidden rounded-[14px] bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)] ${
               group.muted ? "opacity-50 grayscale" : ""
             }`}
@@ -179,6 +224,12 @@ export default function GroupsScreen() {
           </div>
         ) : null}
       </section>
+
+      <CreateGroupModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleGroupCreated}
+      />
     </main>
   );
 }
